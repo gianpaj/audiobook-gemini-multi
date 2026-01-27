@@ -1,0 +1,21 @@
+{
+  "name": "audiobook-gemini-multi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^1.38.0",
+    "mime": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10"
+  }
+}
