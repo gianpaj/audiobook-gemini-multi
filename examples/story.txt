@@ -1,0 +1,42 @@
+# The Enchanted Library
+# An example story demonstrating the audiobook generator format
+
+[NARRATOR] In a quiet corner of the city, hidden between a bakery and an antique shop, stood the most extraordinary library anyone had ever seen. Its windows glowed with a soft golden light that seemed to pulse like a heartbeat.
+
+[NARRATOR] On a rainy Tuesday afternoon, a young woman named Clara pushed open the heavy oak door and stepped inside. The smell of old books and something sweeter, like honey and cinnamon, wrapped around her like a warm blanket.
+
+[CLARA] Hello? Is anyone here?
+
+[NARRATOR] Her voice echoed through the towering shelves that seemed to stretch up into infinity. Books of every color lined the walls, some floating gently in the air as if gravity had simply forgotten about them.
+
+[LIBRARIAN] Ah, a visitor! How delightful!
+
+[NARRATOR] An elderly man appeared from behind a stack of leather-bound volumes. His eyes twinkled behind half-moon spectacles, and his white beard nearly touched his belt.
+
+[CLARA] I'm sorry to bother you. I was just looking for shelter from the rain, but this place... it's incredible.
+
+[LIBRARIAN] Bother me? My dear, this library has been waiting for you. It's been quite lonely lately, you see. Books need readers the way flowers need sunlight.
+
+[NARRATOR] Clara looked around in wonder as a small book with a blue cover floated down from a high shelf and hovered in front of her.
+
+[CLARA] Did that book just... fly to me?
+
+[LIBRARIAN] The books here choose their readers, not the other way around. This one seems particularly eager to tell you its story.
+
+[NARRATOR] Clara reached out tentatively and took the book in her hands. The moment her fingers touched the cover, warmth spread through her entire body, and the title appeared in shimmering gold letters: "The Story of Clara."
+
+[CLARA] But... that's my name. How is this possible?
+
+[LIBRARIAN] Every person who walks through that door has a story waiting for them here. Your story has been waiting for quite some time now. Would you like to read it?
+
+[NARRATOR] Clara's heart raced as she opened the first page. The words began to glow, and suddenly the library around her dissolved into light.
+
+[CLARA] What's happening?
+
+[LIBRARIAN] Don't be afraid. You're not just reading the story anymore. You're living it. That's the magic of this place. Every great adventure begins with a single page.
+
+[NARRATOR] And so Clara's adventure began, in a library that existed somewhere between dreams and reality, where every book was a doorway and every reader was a hero waiting to discover their destiny.
+
+[NARRATOR] But that, dear listener, is a story for another time.
+
+# End of story

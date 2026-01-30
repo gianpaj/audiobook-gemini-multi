@@ -1,21 +1,61 @@
 {
   "name": "audiobook-gemini-multi",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A TypeScript CLI tool for generating audiobooks from story scripts using Text-to-Speech APIs with multi-speaker support",
+  "main": "dist/index.js",
   "type": "module",
-  "scripts": {
-    "start": "node --env-file=.env index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "bin": {
+    "audiobook": "./dist/cli.js"
   },
-  "keywords": [],
+  "scripts": {
+    "build": "tsc",
+    "clean": "tsx --env-file=.env src/cli.ts clean",
+    "convert": "tsx --env-file=.env src/cli.ts convert",
+    "dev": "tsx --env-file=.env src/cli.ts",
+    "generate": "tsx --env-file=.env src/cli.ts generate",
+    "info": "tsx --env-file=.env src/cli.ts info",
+    "init": "tsx --env-file=.env src/cli.ts init",
+    "preview": "tsx --env-file=.env src/cli.ts preview",
+    "setup": "tsx --env-file=.env src/cli.ts setup",
+    "start": "node --env-file=.env dist/cli.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "update-styles": "tsx --env-file=.env src/cli.ts update-styles",
+    "voices": "tsx --env-file=.env src/cli.ts voices"
+  },
+  "keywords": [
+    "audiobook",
+    "tts",
+    "text-to-speech",
+    "gemini",
+    "multi-speaker",
+    "voice",
+    "audio",
+    "cli"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@google/genai": "^1.38.0",
-    "mime": "^4.1.0"
+    "chalk": "^5.3.0",
+    "cli-progress": "^3.12.0",
+    "commander": "^12.1.0",
+    "mime": "^4.1.0",
+    "ora": "^8.1.0"
   },
   "devDependencies": {
-    "@types/node": "^25.0.10"
+    "@types/cli-progress": "^3.11.6",
+    "@types/node": "^25.0.10",
+    "@vitest/coverage-v8": "^4.0.18",
+    "memfs": "^4.15.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

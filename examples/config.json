@@ -1,0 +1,46 @@
+{
+  "_comment": "Audiobook Generator Configuration",
+  "_docs": "See README.md for full documentation of all options",
+  "version": "1.0.0",
+  "provider": {
+    "name": "gemini",
+    "apiKey": "${GEMINI_API_KEY}",
+    "model": "gemini-2.5-pro-preview-tts",
+    "rateLimit": 60,
+    "maxRetries": 3,
+    "timeout": 60000
+  },
+  "audio": {
+    "format": "wav",
+    "sampleRate": 24000,
+    "bitDepth": 16,
+    "silencePadding": 500,
+    "normalize": false
+  },
+  "voices": [
+    {
+      "name": "NARRATOR",
+      "voiceName": "Zephyr",
+      "stylePrompt": "Calm, measured storytelling voice with clear enunciation. Warm and inviting tone that draws listeners into the story.",
+      "speed": 1.0
+    },
+    {
+      "name": "CLARA",
+      "voiceName": "Kore",
+      "stylePrompt": "Young woman in her twenties, curious and slightly nervous at first, growing more confident. Expressive and warm.",
+      "speed": 1.0
+    },
+    {
+      "name": "LIBRARIAN",
+      "voiceName": "Orus",
+      "stylePrompt": "Wise, elderly gentleman with a gentle and mysterious quality. Speaks with warmth and a hint of magic in his voice.",
+      "speed": 0.95
+    }
+  ],
+  "defaultVoice": {
+    "voiceName": "Zephyr",
+    "stylePrompt": "Natural speaking voice",
+    "speed": 1.0
+  },
+  "globalSeed": 12345
+}
