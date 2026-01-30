@@ -160,6 +160,7 @@ async function generateAudiobook(
     maxSegments?: number;
     startFrom?: number;
     speakers?: string[];
+    timestamp?: string;
   } = {},
 ): Promise<AudiobookResult> {
   const spinner = ora();
@@ -431,7 +432,8 @@ async function generateAudiobook(
   // Stitch audio files together
   spinner.start("Stitching audio files...");
 
-  const outputFileName = `${basename(storyPath, extname(storyPath))}_audiobook.wav`;
+  const timestampSuffix = options.timestamp ? `_${options.timestamp}` : "";
+  const outputFileName = `${basename(storyPath, extname(storyPath))}${timestampSuffix}_audiobook.wav`;
   const outputPath = join(outputDir, outputFileName);
 
   const audioFiles: AudioFileInfo[] = successfulResults.map((r) => ({
@@ -454,7 +456,7 @@ async function generateAudiobook(
     // Save manifest
     const manifestPath = join(
       outputDir,
-      `${basename(storyPath, extname(storyPath))}_manifest.json`,
+      `${basename(storyPath, extname(storyPath))}${timestampSuffix}_manifest.json`,
     );
     await saveManifest(stitchResult.manifest, manifestPath);
 
@@ -602,6 +604,9 @@ program
       console.log("\n" + getConfigSummary(config) + "\n");
     }
 
+    // Generate timestamp for unique output filenames
+    const timestamp = Date.now().toString();
+
     try {
       const result = await generateAudiobook(
         storyFile,
@@ -611,6 +616,7 @@ program
           force: options.force,
           verbose: options.verbose,
           dryRun: options.dryRun,
+          timestamp,
         },
       );
 
@@ -673,6 +679,9 @@ program
       ),
     );
 
+    // Generate timestamp for unique output filenames
+    const timestamp = Date.now().toString();
+
     try {
       await generateAudiobook(
         storyFile,
@@ -684,6 +693,7 @@ program
           maxSegments,
           startFrom,
           speakers,
+          timestamp,
         },
       );
 
@@ -750,8 +760,10 @@ program
       const manifest = await loadCacheManifest(outputDir);
       if (!manifest) {
         printInfo("No cache found. Running full generation...");
+        const timestamp = Date.now().toString();
         await generateAudiobook(storyFile, config, outputDir, {
           verbose: options.verbose,
+          timestamp,
         });
         return;
       }
@@ -774,9 +786,11 @@ program
       );
 
       // Regenerate changed segments
+      const timestamp = Date.now().toString();
       await generateAudiobook(storyFile, config, outputDir, {
         force: true, // Force regeneration of all segments
         verbose: options.verbose,
+        timestamp,
       });
 
       printSuccess("Style update complete!");

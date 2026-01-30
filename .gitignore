@@ -16,8 +16,9 @@ output/
 # Generated audio files
 *.wav
 *.mp3
-*.ogg
-*.flac
+
+*.txt
+config.json
 
 # IDE and editor files
 .idea/
@@ -31,9 +32,6 @@ output/
 Thumbs.db
 
 # Debug logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 
 # TypeScript cache
