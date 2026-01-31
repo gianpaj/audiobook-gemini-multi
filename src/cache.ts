@@ -6,6 +6,7 @@
  * - Detect changes in text or style prompts
  * - Support resuming interrupted generations
  * - Clean up stale cache entries
+ * - Recover cached segments from existing audio files
  */
 
 import {
@@ -127,6 +128,58 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Recover cached segments from existing audio files
+ * This is useful when the manifest was lost but audio files still exist
+ */
+export async function recoverCachedSegments(
+  outputDir: string,
+  segments: Segment[],
+  config: Config,
+  storyHash?: string,
+): Promise<CachedSegment[]> {
+  const recovered: CachedSegment[] = [];
+  const cacheDir = getCacheDir(outputDir, storyHash);
+  const segmentsDir = join(cacheDir, "segments");
+
+  if (!(await fileExists(segmentsDir))) {
+    return recovered;
+  }
+
+  for (const segment of segments) {
+    const audioPath = getCachedSegmentPath(
+      outputDir,
+      segment.id,
+      config.audio.format,
+      storyHash,
+    );
+
+    if (await fileExists(audioPath)) {
+      try {
+        const fileStat = await stat(audioPath);
+        const hash = generateSegmentHash(segment, config);
+
+        recovered.push({
+          segmentId: segment.id,
+          index: segment.index,
+          speaker: segment.speaker,
+          audioPath,
+          durationMs: 0, // Unknown, will be recalculated if needed
+          fileSize: fileStat.size,
+          hash,
+          generatedAt: fileStat.mtime.toISOString(),
+          provider: config.provider.name,
+          success: true,
+        });
+      } catch {
+        // Ignore errors reading file stats
+      }
+    }
+  }
+
+  return recovered;
 }
 
 /**

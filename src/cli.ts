@@ -58,6 +58,7 @@ import {
   ensureCacheDir,
   getCacheDir,
   hashText,
+  recoverCachedSegments,
 } from "./cache.js";
 
 import {
@@ -218,34 +219,75 @@ async function generateAudiobook(
   // Ensure output directory exists
   await mkdir(outputDir, { recursive: true });
 
-  // Generate story hash for story-specific cache folder
-  const storyHash = hashText(await readFile(storyPath, "utf-8"));
+  // Use filename-based hash for cache folder (not content-based)
+  // This keeps the same cache folder when re-running the same file
+  // Individual segment caching is still content-dependent
+  const storyBasename = basename(storyPath, extname(storyPath));
+  const storyHash = hashText(storyBasename);
   const configHash = hashConfig(config);
 
   // Use story-specific cache folder
   await ensureCacheDir(outputDir, storyHash);
   const cacheDir = getCacheDir(outputDir, storyHash);
   setDebugLogCacheDir(cacheDir);
-  printInfo(`Using cache folder: ${storyHash.substring(0, 8)}`);
+  printInfo(
+    `Using cache folder: ${storyBasename} (${storyHash.substring(0, 8)})`,
+  );
 
   // Load or create cache manifest
   let manifest = await loadCacheManifest(outputDir, storyHash);
 
-  if (
-    options.force ||
-    !manifest ||
-    manifest.storyHash !== storyHash ||
-    manifest.configHash !== configHash
-  ) {
-    if (manifest && options.verbose) {
-      if (manifest.storyHash !== storyHash) {
-        printInfo("Story file changed, cache may be partially invalidated");
+  if (!manifest) {
+    // No manifest exists, create a new one
+    manifest = createEmptyManifest(storyPath, storyHash, configHash);
+  } else {
+    // Manifest exists - update storyHash and configHash if they changed
+    // but keep the cached segments (individual segments are validated by content hash)
+    if (manifest.storyHash !== storyHash) {
+      if (options.verbose) {
+        printInfo("Updating manifest storyHash (cache folder changed)");
       }
-      if (manifest.configHash !== configHash) {
-        printInfo("Configuration changed, cache may be partially invalidated");
+      manifest = { ...manifest, storyHash };
+    }
+    if (manifest.configHash !== configHash) {
+      if (options.verbose) {
+        printInfo("Configuration changed, segments will be revalidated");
+      }
+      manifest = { ...manifest, configHash };
+    }
+  }
+
+  // Try to recover cached segments from existing audio files if manifest is missing them
+  const existingSegmentCount = manifest.segments.length;
+  if (existingSegmentCount < segmentsToProcess.length && !options.force) {
+    const recovered = await recoverCachedSegments(
+      outputDir,
+      segmentsToProcess,
+      config,
+      storyHash,
+    );
+
+    if (recovered.length > existingSegmentCount) {
+      // Merge recovered segments into manifest (don't overwrite existing entries)
+      const existingIds = new Set(manifest.segments.map((s) => s.segmentId));
+      const newSegments = recovered.filter(
+        (s) => !existingIds.has(s.segmentId),
+      );
+
+      if (newSegments.length > 0) {
+        manifest = {
+          ...manifest,
+          segments: [...manifest.segments, ...newSegments].sort(
+            (a, b) => a.index - b.index,
+          ),
+        };
+        printInfo(
+          `Recovered ${newSegments.length} cached segments from existing audio files`,
+        );
+        // Save the recovered manifest
+        await saveCacheManifest(outputDir, manifest, storyHash);
       }
     }
-    manifest = createEmptyManifest(storyPath, storyHash, configHash);
   }
 
   // Determine which segments need generation
@@ -379,6 +421,16 @@ async function generateAudiobook(
 
           totalAudioDurationMs += response.durationMs || 0;
 
+          // Log progress
+          const durationStr = response.durationMs
+            ? ` (${formatDuration(response.durationMs)})`
+            : "";
+          console.log(
+            chalk.green(
+              `  ✓ [${i + 1}/${segmentsToGenerate.length}] ${segment.id}${durationStr}`,
+            ),
+          );
+
           segmentResults.push({
             segment,
             success: true,
@@ -404,10 +456,8 @@ async function generateAudiobook(
 
       // progressBar.update(i + 1);
 
-      // Save manifest periodically (every 10 segments)
-      if ((i + 1) % 10 === 0) {
-        await saveCacheManifest(outputDir, manifest, storyHash);
-      }
+      // Save manifest after each successful segment to avoid losing progress on interruption
+      await saveCacheManifest(outputDir, manifest, storyHash);
     }
 
     // progressBar.stop();
