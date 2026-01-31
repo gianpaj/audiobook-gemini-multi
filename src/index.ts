@@ -123,7 +123,16 @@ export {
 } from "./tts-provider.js";
 
 // Export utility functions
-export { debugLog, setDebugLogCacheDir, getDebugLogCacheDir } from "./utils.js";
+export {
+  debugLog,
+  setDebugLogCacheDir,
+  getDebugLogCacheDir,
+  processWithConcurrency,
+  type ProcessResult,
+} from "./utils.js";
+
+// Export constants
+export { DEFAULT_CONCURRENCY } from "./types.js";
 
 // Export audio functions
 export {

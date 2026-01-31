@@ -476,6 +476,9 @@ describe("tts-provider", () => {
       });
 
       it("should retry with incremented seed on transient network errors", async () => {
+        // Use fake timers to avoid real 2-second delays between retries
+        vi.useFakeTimers();
+
         // Track how many times generateContent is called
         let callCount = 0;
 
@@ -517,11 +520,17 @@ describe("tts-provider", () => {
           .spyOn(console, "error")
           .mockImplementation(() => {});
 
-        const response = await provider.generateAudio({
+        // Start the generation (it will wait on setTimeout for transient error delays)
+        const responsePromise = provider.generateAudio({
           text: "Hello!",
           voice: { ...VOICE_NARRATOR, seed: 100 },
           outputPath: "/output/test.wav",
         });
+
+        // Advance timers to skip through the 2-second delays
+        await vi.runAllTimersAsync();
+
+        const response = await responsePromise;
 
         // Should succeed after retrying with different seeds
         expect(response.success).toBe(true);
@@ -537,6 +546,7 @@ describe("tts-provider", () => {
 
         consoleErrorSpy.mockRestore();
         resetMockConfig();
+        vi.useRealTimers();
       });
 
       it("should write valid WAV file", async () => {

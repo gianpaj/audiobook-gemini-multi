@@ -18,11 +18,14 @@ import { join, basename, extname } from "path";
 import type {
   Config,
   ParsedStory,
+  Segment,
   SegmentGenerationResult,
   AudiobookResult,
   GenerateOptions,
   PreviewOptions,
 } from "./types.js";
+
+import { DEFAULT_CONCURRENCY } from "./types.js";
 
 import {
   parseFile,
@@ -68,7 +71,7 @@ import {
   type TTSProvider,
 } from "./tts-provider.js";
 
-import { setDebugLogCacheDir } from "./utils.js";
+import { setDebugLogCacheDir, processWithConcurrency } from "./utils.js";
 
 import {
   convertToStoryFormat,
@@ -165,6 +168,7 @@ async function generateAudiobook(
     startFrom?: number;
     speakers?: string[];
     timestamp?: string;
+    concurrency?: number;
   } = {},
 ): Promise<AudiobookResult> {
   const spinner = ora();
@@ -219,47 +223,41 @@ async function generateAudiobook(
   // Ensure output directory exists
   await mkdir(outputDir, { recursive: true });
 
-  // Use filename-based hash for cache folder (not content-based)
-  // This keeps the same cache folder when re-running the same file
-  // Individual segment caching is still content-dependent
-  const storyBasename = basename(storyPath, extname(storyPath));
-  const storyHash = hashText(storyBasename);
+  // Generate story hash for story-specific cache folder
+  const storyHash = hashText(await readFile(storyPath, "utf-8"));
   const configHash = hashConfig(config);
 
   // Use story-specific cache folder
   await ensureCacheDir(outputDir, storyHash);
   const cacheDir = getCacheDir(outputDir, storyHash);
   setDebugLogCacheDir(cacheDir);
-  printInfo(
-    `Using cache folder: ${storyBasename} (${storyHash.substring(0, 8)})`,
-  );
+  printInfo(`Using cache folder: ${storyHash.substring(0, 8)}`);
 
   // Load or create cache manifest
-  let manifest = await loadCacheManifest(outputDir, storyHash);
+  const loadedManifest = await loadCacheManifest(outputDir, storyHash);
 
-  if (!manifest) {
-    // No manifest exists, create a new one
-    manifest = createEmptyManifest(storyPath, storyHash, configHash);
-  } else {
-    // Manifest exists - update storyHash and configHash if they changed
-    // but keep the cached segments (individual segments are validated by content hash)
-    if (manifest.storyHash !== storyHash) {
-      if (options.verbose) {
-        printInfo("Updating manifest storyHash (cache folder changed)");
+  if (
+    options.force ||
+    !loadedManifest ||
+    loadedManifest.storyHash !== storyHash ||
+    loadedManifest.configHash !== configHash
+  ) {
+    if (loadedManifest && options.verbose) {
+      if (loadedManifest.storyHash !== storyHash) {
+        printInfo("Story file changed, cache may be partially invalidated");
       }
-      manifest = { ...manifest, storyHash };
-    }
-    if (manifest.configHash !== configHash) {
-      if (options.verbose) {
-        printInfo("Configuration changed, segments will be revalidated");
+      if (loadedManifest.configHash !== configHash) {
+        printInfo("Configuration changed, cache may be partially invalidated");
       }
-      manifest = { ...manifest, configHash };
     }
   }
 
-  // Try to recover cached segments from existing audio files if manifest is missing them
-  const existingSegmentCount = manifest.segments.length;
-  if (existingSegmentCount < segmentsToProcess.length && !options.force) {
+  // Manifest is always non-null after this point
+  let manifest =
+    loadedManifest ?? createEmptyManifest(storyPath, storyHash, configHash);
+
+  // Try to recover cached segments from existing audio files if manifest is empty or incomplete
+  if (!options.force && manifest.segments.length < segmentsToProcess.length) {
     const recovered = await recoverCachedSegments(
       outputDir,
       segmentsToProcess,
@@ -267,24 +265,30 @@ async function generateAudiobook(
       storyHash,
     );
 
-    if (recovered.length > existingSegmentCount) {
-      // Merge recovered segments into manifest (don't overwrite existing entries)
-      const existingIds = new Set(manifest.segments.map((s) => s.segmentId));
-      const newSegments = recovered.filter(
-        (s) => !existingIds.has(s.segmentId),
-      );
+    if (recovered.length > 0) {
+      // Merge recovered segments into manifest, counting only newly added ones
+      let newlyRecoveredCount = 0;
+      for (const recoveredSegment of recovered) {
+        // Only add if not already in manifest
+        if (
+          !manifest.segments.find(
+            (s) => s.segmentId === recoveredSegment.segmentId,
+          )
+        ) {
+          manifest.segments.push(recoveredSegment);
+          newlyRecoveredCount++;
+        }
+      }
 
-      if (newSegments.length > 0) {
-        manifest = {
-          ...manifest,
-          segments: [...manifest.segments, ...newSegments].sort(
-            (a, b) => a.index - b.index,
-          ),
-        };
+      if (newlyRecoveredCount > 0) {
+        // Sort by index
+        manifest.segments.sort((a, b) => a.index - b.index);
+
         printInfo(
-          `Recovered ${newSegments.length} cached segments from existing audio files`,
+          `Recovered ${newlyRecoveredCount} cached segments from existing audio files`,
         );
-        // Save the recovered manifest
+
+        // Save the updated manifest with recovered segments
         await saveCacheManifest(outputDir, manifest, storyHash);
       }
     }
@@ -368,41 +372,32 @@ async function generateAudiobook(
   const cachedCount = cachedSegmentsInfo.length;
   const toGenerateCount = segmentsToGenerate.length;
 
+  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+
   console.log("\n" + chalk.cyan("Segment summary:"));
   console.log(
-    `  Total: ${totalSegments} | Cached: ${chalk.green(cachedCount)} | To generate: ${chalk.yellow(toGenerateCount)}`,
+    `  Total: ${totalSegments} | Cached: ${chalk.green(cachedCount)} | To generate: ${chalk.yellow(toGenerateCount)} | Concurrency: ${chalk.cyan(concurrency)}`,
   );
 
   if (segmentsToGenerate.length > 0) {
     console.log("\n" + chalk.cyan("Generating audio segments..."));
 
-    // const progressBar = new cliProgress.SingleBar(
-    //   {
-    //     format:
-    //       "Progress |" +
-    //       chalk.cyan("{bar}") +
-    //       "| {percentage}% | {value}/{total} segments | ETA: {eta}s",
-    //     barCompleteChar: "█",
-    //     barIncompleteChar: "░",
-    //     hideCursor: true,
-    //   },
-    //   cliProgress.Presets.shades_classic,
-    // );
+    // Track completed count for periodic manifest saves
+    let completedSinceLastSave = 0;
 
-    // progressBar.start(segmentsToGenerate.length, 0);
+    // Process segments in parallel with concurrency limit
+    const processResults = await processWithConcurrency(
+      segmentsToGenerate,
+      async (segment: Segment, _index: number) => {
+        const segmentStartTime = Date.now();
 
-    for (let i = 0; i < segmentsToGenerate.length; i++) {
-      const segment = segmentsToGenerate[i];
-      const segmentStartTime = Date.now();
+        const outputPath = getCachedSegmentPath(
+          outputDir,
+          segment.id,
+          config.audio.format,
+          storyHash,
+        );
 
-      const outputPath = getCachedSegmentPath(
-        outputDir,
-        segment.id,
-        config.audio.format,
-        storyHash,
-      );
-
-      try {
         const response = await generateSegmentAudio(
           provider,
           segment,
@@ -410,57 +405,70 @@ async function generateAudiobook(
           outputPath,
         );
 
-        if (response.success && response.audioPath) {
-          // Update cache manifest
-          manifest = updateCachedSegment(manifest, segment, config, {
-            audioPath: response.audioPath,
-            durationMs: response.durationMs || 0,
-            fileSize: response.fileSize || 0,
-            success: true,
-          });
-
-          totalAudioDurationMs += response.durationMs || 0;
-
-          // Log progress
-          const durationStr = response.durationMs
-            ? ` (${formatDuration(response.durationMs)})`
-            : "";
-          console.log(
-            chalk.green(
-              `  ✓ [${i + 1}/${segmentsToGenerate.length}] ${segment.id}${durationStr}`,
-            ),
-          );
-
-          segmentResults.push({
-            segment,
-            success: true,
-            audioPath: response.audioPath,
-            durationMs: response.durationMs,
-            fileSize: response.fileSize,
-            fromCache: false,
-            timeTakenMs: Date.now() - segmentStartTime,
-          });
-        } else {
-          // Stop immediately on failure
-          // progressBar.stop();
-          exitWithError(
-            `Failed to generate segment ${segment.id}:\n${response.error}`,
-          );
+        if (!response.success || !response.audioPath) {
+          throw new Error(response.error || "Unknown generation error");
         }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        // Stop immediately on failure
-        // progressBar.stop();
-        exitWithError(`Failed to generate segment ${segment.id}:\n${errorMsg}`);
-      }
 
-      // progressBar.update(i + 1);
+        return {
+          segment,
+          response,
+          timeTakenMs: Date.now() - segmentStartTime,
+        };
+      },
+      {
+        concurrency,
+        stopOnError: true,
+        onProgress: async (completed, total, result) => {
+          if (result.success && result.result) {
+            const { segment, response, timeTakenMs } = result.result;
 
-      // Save manifest after each successful segment to avoid losing progress on interruption
-      await saveCacheManifest(outputDir, manifest, storyHash);
+            // Update cache manifest (will be saved periodically)
+            manifest = updateCachedSegment(manifest, segment, config, {
+              audioPath: response.audioPath!,
+              durationMs: response.durationMs || 0,
+              fileSize: response.fileSize || 0,
+              success: true,
+            });
+
+            totalAudioDurationMs += response.durationMs || 0;
+
+            segmentResults.push({
+              segment,
+              success: true,
+              audioPath: response.audioPath,
+              durationMs: response.durationMs,
+              fileSize: response.fileSize,
+              fromCache: false,
+              timeTakenMs,
+            });
+
+            // Log progress
+            console.log(
+              chalk.gray(
+                `  [${completed}/${total}] Generated ${segment.id} (${formatDuration(response.durationMs || 0)})`,
+              ),
+            );
+
+            // Save manifest periodically (every 10 completions)
+            completedSinceLastSave++;
+            if (completedSinceLastSave >= 10) {
+              completedSinceLastSave = 0;
+              await saveCacheManifest(outputDir, manifest, storyHash);
+            }
+          }
+        },
+      },
+    );
+
+    // Check for any failures
+    const failures = processResults.filter((r) => !r.success);
+    if (failures.length > 0) {
+      const firstFailure = failures[0];
+      const segment = firstFailure.item;
+      exitWithError(
+        `Failed to generate segment ${segment.id}:\n${firstFailure.error}`,
+      );
     }
-
-    // progressBar.stop();
   }
 
   // Add cached segments to results
@@ -650,6 +658,11 @@ program
   .option("-f, --force", "Force regeneration (ignore cache)", false)
   .option("-v, --verbose", "Verbose output", false)
   .option("-d, --dry-run", "Show what would be done without generating", false)
+  .option(
+    "-p, --concurrency <number>",
+    `Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
+    (val) => parseInt(val, 10),
+  )
   .action(async (storyFile: string, options: GenerateOptions) => {
     // Check story file exists
     if (!(await fileExists(storyFile))) {
@@ -685,6 +698,7 @@ program
           verbose: options.verbose,
           dryRun: options.dryRun,
           timestamp,
+          concurrency: options.concurrency,
         },
       );
 
@@ -721,6 +735,11 @@ program
   .option("--speaker <name>", "Preview only specific speaker")
   .option("-f, --force", "Force regeneration", false)
   .option("-v, --verbose", "Verbose output", false)
+  .option(
+    "-p, --concurrency <number>",
+    `Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
+    (val) => parseInt(val, 10),
+  )
   .action(async (storyFile: string, options: PreviewOptions) => {
     if (!(await fileExists(storyFile))) {
       exitWithError(`Story file not found: ${storyFile}`);
@@ -766,6 +785,7 @@ program
           startFrom,
           speakers,
           timestamp,
+          concurrency: options.concurrency,
         },
       );
 

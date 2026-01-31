@@ -32,12 +32,23 @@ audiobook-gemini-multi/
 ## Key Commands
 
 - `pnpm run generate <storyFile>` - Generate full audiobook
+- `pnpm run generate <storyFile> -p 8` - Generate with 8 parallel workers
 - `pnpm run preview <storyFile> -n 5` - Generate preview (first N segments)
 - `pnpm run convert <inputFile>` - Convert plain text to story format using AI
 - `pnpm run init <storyFile>` - Create config from story speakers
 - `pnpm run clean` - Clear cache and output files
 - `pnpm run test` - Run Vitest tests
 - `pnpm run typecheck` - Run TypeScript type checking
+
+### Parallel Processing
+
+Segment generation now runs in parallel for faster audiobook creation:
+
+- Default concurrency: 4 parallel segment generations
+- Use `-p <number>` or `--concurrency <number>` to adjust
+- Example: `pnpm run generate story.txt -p 8` for 8 parallel workers
+- The rate limiter in the TTS provider still respects API limits
+- Manifest is saved periodically (every 10 completions) to preserve progress
 
 ## Important Notes
 

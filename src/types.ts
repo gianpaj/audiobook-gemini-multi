@@ -389,6 +389,8 @@ export interface GenerateOptions {
   verbose?: boolean;
   /** Dry run (don't generate, just show what would be done) */
   dryRun?: boolean;
+  /** Number of segments to generate in parallel (default: 4) */
+  concurrency?: number;
 }
 
 /**
@@ -402,6 +404,9 @@ export interface PreviewOptions extends GenerateOptions {
   /** Specific speaker to preview */
   speaker?: string;
 }
+
+/** Default concurrency for parallel segment generation */
+export const DEFAULT_CONCURRENCY = 4;
 
 /**
  * Options for the update-styles command
