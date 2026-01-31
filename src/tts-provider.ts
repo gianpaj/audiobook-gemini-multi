@@ -315,7 +315,7 @@ export class GeminiTTSProvider implements TTSProvider {
           // Build the prompt with style instructions
           let textPrompt = request.text;
           if (request.voice.stylePrompt) {
-            textPrompt = `[Speaking style: ${request.voice.stylePrompt}]\n\n${request.text}`;
+            textPrompt = `${request.voice.stylePrompt}: ${request.text}`;
           }
 
           const contents = [

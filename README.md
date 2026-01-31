@@ -145,7 +145,7 @@ pnpm run generate story.txt
 Generate a preview with only the first N segments.
 
 ```bash
-pnpm run preview story.txt -- -n 5
+pnpm run preview story.txt -n 5
 # Options:
 #   -c, --config <path>      Path to config file
 #   -o, --output <path>      Output directory
@@ -175,7 +175,7 @@ pnpm run update-styles story.txt
 Clear cache and generated files.
 
 ```bash
-pnpm run clean -- --force
+pnpm run clean --force
 # Options:
 #   -o, --output <path>  Output directory
 #   --cache-only        Only clear cache, keep generated audiobooks
@@ -340,7 +340,7 @@ pnpm run generate my-story.txt
 pnpm run update-styles my-story.txt
 
 # Or preview changes first
-pnpm run preview my-story.txt -- --speaker CHARACTER1
+pnpm run preview my-story.txt --speaker CHARACTER1
 ```
 
 ### Resuming Interrupted Generation
@@ -355,7 +355,7 @@ pnpm run generate my-story.txt
 ### Force Full Regeneration
 
 ```bash
-pnpm run generate my-story.txt -- --force
+pnpm run generate my-story.txt --force
 ```
 
 ## Output Files
