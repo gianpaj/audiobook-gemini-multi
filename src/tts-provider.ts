@@ -5,7 +5,7 @@
  * implementation for Google's Gemini TTS API
  */
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, FinishReason } from "@google/genai";
 import type { GenerateContentConfig } from "@google/genai";
 import { writeFile, stat } from "fs/promises";
 import { dirname } from "path";
@@ -325,28 +325,36 @@ export class GeminiTTSProvider implements TTSProvider {
             },
           ];
 
-          const response = await this.client!.models.generateContentStream({
+          const response = await this.client!.models.generateContent({
             model,
             config: genConfig,
             contents,
           });
 
-          // Collect audio data from stream
-          let audioBuffer: Buffer | null = null;
+          // Check for blocked content or incomplete generation
+          const finishReason = response?.candidates?.[0]?.finishReason;
+          const blockReason = response?.promptFeedback?.blockReason;
 
-          for await (const chunk of response) {
-            if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-              const inlineData =
-                chunk.candidates[0].content.parts[0].inlineData;
-              const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
-
-              // Convert to WAV format
-              audioBuffer = convertToWav(inlineData.data || "", mimeType);
-              break;
-            }
+          if (blockReason) {
+            throw new Error(`Content blocked: ${blockReason}`);
           }
 
-          return audioBuffer;
+          if (finishReason && finishReason !== FinishReason.STOP) {
+            throw new Error(`Generation incomplete: ${finishReason}`);
+          }
+
+          // Extract audio data from response
+          const inlineData =
+            response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+
+          if (!inlineData?.data) {
+            return null;
+          }
+
+          const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
+
+          // Convert to WAV format
+          return convertToWav(inlineData.data, mimeType);
         },
         {
           maxRetries: this.config.maxRetries ?? 3,
@@ -451,27 +459,36 @@ export class GeminiTTSProvider implements TTSProvider {
             },
           ];
 
-          const response = await this.client!.models.generateContentStream({
+          const response = await this.client!.models.generateContent({
             model,
             config: genConfig,
             contents,
           });
 
-          // Collect audio data from stream
-          let audioBuffer: Buffer | null = null;
+          // Check for blocked content or incomplete generation
+          const finishReason = response?.candidates?.[0]?.finishReason;
+          const blockReason = response?.promptFeedback?.blockReason;
 
-          for await (const chunk of response) {
-            if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-              const inlineData =
-                chunk.candidates[0].content.parts[0].inlineData;
-              const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
-
-              audioBuffer = convertToWav(inlineData.data || "", mimeType);
-              break;
-            }
+          if (blockReason) {
+            throw new Error(`Content blocked: ${blockReason}`);
           }
 
-          return audioBuffer;
+          if (finishReason && finishReason !== FinishReason.STOP) {
+            throw new Error(`Generation incomplete: ${finishReason}`);
+          }
+
+          // Extract audio data from response
+          const inlineData =
+            response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+
+          if (!inlineData?.data) {
+            return null;
+          }
+
+          const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
+
+          // Convert to WAV format
+          return convertToWav(inlineData.data, mimeType);
         },
         {
           maxRetries: this.config.maxRetries ?? 3,

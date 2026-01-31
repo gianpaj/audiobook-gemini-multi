@@ -358,25 +358,17 @@ async function generateAudiobook(
             timeTakenMs: Date.now() - segmentStartTime,
           });
         } else {
-          errors.push(`Segment ${segment.id}: ${response.error}`);
-          segmentResults.push({
-            segment,
-            success: false,
-            fromCache: false,
-            error: response.error,
-            timeTakenMs: Date.now() - segmentStartTime,
-          });
+          // Stop immediately on failure
+          progressBar.stop();
+          exitWithError(
+            `Failed to generate segment ${segment.id}:\n${response.error}`,
+          );
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        errors.push(`Segment ${segment.id}: ${errorMsg}`);
-        segmentResults.push({
-          segment,
-          success: false,
-          fromCache: false,
-          error: errorMsg,
-          timeTakenMs: Date.now() - segmentStartTime,
-        });
+        // Stop immediately on failure
+        progressBar.stop();
+        exitWithError(`Failed to generate segment ${segment.id}:\n${errorMsg}`);
       }
 
       progressBar.update(i + 1);
@@ -417,13 +409,8 @@ async function generateAudiobook(
   // Sort results by segment index
   segmentResults.sort((a, b) => a.segment.index - b.segment.index);
 
-  // Check if all segments succeeded
+  // All segments should have succeeded at this point (we exit on failure)
   const successfulResults = segmentResults.filter((r) => r.success);
-  const failedCount = segmentResults.length - successfulResults.length;
-
-  if (failedCount > 0) {
-    printWarning(`${failedCount} segments failed to generate`);
-  }
 
   if (successfulResults.length === 0) {
     exitWithError("No segments were successfully generated");
@@ -474,12 +461,12 @@ async function generateAudiobook(
         totalSegments: segmentsToProcess.length,
         generatedSegments: segmentsToGenerate.length,
         cachedSegments: cachedSegmentsInfo.length,
-        failedSegments: failedCount,
+        failedSegments: 0, // We exit immediately on failure, so this is always 0
         totalTimeMs,
         totalAudioDurationMs: stitchResult.totalDurationMs,
       },
       segmentResults,
-      success: failedCount === 0,
+      success: true, // We exit immediately on failure, so this is always true
       errors,
     };
   } catch (error) {

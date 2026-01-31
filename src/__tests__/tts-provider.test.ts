@@ -22,6 +22,8 @@ let mockConfig = {
   shouldFail: false,
   failureMessage: "Mock API failure",
   audioDurationMs: 500,
+  finishReason: "STOP" as string | undefined,
+  blockReason: undefined as string | undefined,
 };
 
 // Helper functions to control mock
@@ -34,6 +36,8 @@ function resetMockConfig() {
     shouldFail: false,
     failureMessage: "Mock API failure",
     audioDurationMs: 500,
+    finishReason: "STOP",
+    blockReason: undefined,
   };
 }
 
@@ -47,12 +51,12 @@ function createMockAudioData(durationMs: number = 500): string {
   return data.toString("base64");
 }
 
-const mockGenerateContentStream = vi.fn(async function* () {
+const mockGenerateContent = vi.fn(async () => {
   if (mockConfig.shouldFail) {
     throw new Error(mockConfig.failureMessage);
   }
 
-  yield {
+  return {
     candidates: [
       {
         content: {
@@ -65,8 +69,12 @@ const mockGenerateContentStream = vi.fn(async function* () {
             },
           ],
         },
+        finishReason: mockConfig.finishReason,
       },
     ],
+    promptFeedback: mockConfig.blockReason
+      ? { blockReason: mockConfig.blockReason }
+      : undefined,
   };
 });
 
@@ -81,13 +89,23 @@ vi.mock("@google/genai", () => {
 
     get models() {
       return {
-        generateContentStream: mockGenerateContentStream,
+        generateContent: mockGenerateContent,
       };
     }
   }
 
+  // Mock FinishReason enum
+  const FinishReason = {
+    FINISH_REASON_UNSPECIFIED: "FINISH_REASON_UNSPECIFIED",
+    STOP: "STOP",
+    MAX_TOKENS: "MAX_TOKENS",
+    SAFETY: "SAFETY",
+    RECITATION: "RECITATION",
+  };
+
   return {
     GoogleGenAI,
+    FinishReason,
   };
 });
 
@@ -233,7 +251,7 @@ describe("tts-provider", () => {
 
         expect(response.success).toBe(true);
         // Verify the API was called
-        expect(mockGenerateContentStream).toHaveBeenCalled();
+        expect(mockGenerateContent).toHaveBeenCalled();
       });
 
       it("should handle API failure", async () => {
@@ -256,6 +274,69 @@ describe("tts-provider", () => {
 
         expect(response.success).toBe(false);
         expect(response.error).toContain("Rate limit exceeded");
+      });
+
+      it("should handle blocked content", async () => {
+        setMockConfig({
+          blockReason: "SAFETY",
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const response = await provider.generateAudio({
+          text: "Hello!",
+          voice: VOICE_NARRATOR,
+          outputPath: "/output/test.wav",
+        });
+
+        expect(response.success).toBe(false);
+        expect(response.error).toContain("Content blocked: SAFETY");
+      });
+
+      it("should handle incomplete generation", async () => {
+        setMockConfig({
+          finishReason: "MAX_TOKENS",
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const response = await provider.generateAudio({
+          text: "Hello!",
+          voice: VOICE_NARRATOR,
+          outputPath: "/output/test.wav",
+        });
+
+        expect(response.success).toBe(false);
+        expect(response.error).toContain("Generation incomplete: MAX_TOKENS");
+      });
+
+      it("should handle SAFETY finish reason", async () => {
+        setMockConfig({
+          finishReason: "SAFETY",
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const response = await provider.generateAudio({
+          text: "Hello!",
+          voice: VOICE_NARRATOR,
+          outputPath: "/output/test.wav",
+        });
+
+        expect(response.success).toBe(false);
+        expect(response.error).toContain("Generation incomplete: SAFETY");
       });
 
       it("should write valid WAV file", async () => {
