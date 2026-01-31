@@ -122,6 +122,9 @@ export {
   type TTSProvider,
 } from "./tts-provider.js";
 
+// Export utility functions
+export { debugLog, setDebugLogCacheDir, getDebugLogCacheDir } from "./utils.js";
+
 // Export audio functions
 export {
   stitchAudioFiles,

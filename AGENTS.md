@@ -16,6 +16,7 @@ audiobook-gemini-multi/
 │   ├── audio.ts         # Audio stitching and WAV processing
 │   ├── cache.ts         # Caching and manifest management
 │   ├── converter.ts     # LLM-based text to story format conversion
+│   ├── utils.ts         # Utility functions (debug logging, etc.)
 │   ├── types.ts         # TypeScript type definitions
 │   ├── index.ts         # Module exports
 │   ├── fixtures/        # Test fixtures
@@ -67,7 +68,16 @@ ALICE: Hello there!
 ### Environment Variables
 
 - `GEMINI_API_KEY` - Required for TTS generation and text conversion
-- `TTS_DEBUG_LOG` - Optional path to write debug logs to a file
+- `TTS_DEBUG_LOG` - Optional path to write debug logs to a file (legacy, for backwards compatibility)
+
+### Debug Logging
+
+Debug logs are automatically written to `{outputDir}/.audiobook-cache/{storyHash}/debug.log` inside each story's cache folder. This includes:
+- TTS request details (voice, seed, text prompt)
+- API response information
+- Retry attempts with seed increments
+
+You can also set `TTS_DEBUG_LOG` environment variable to write logs to an additional file.
 
 ### Testing
 
@@ -99,7 +109,23 @@ ALICE: Hello there!
 
 Always check Gemini API responses for:
 1. `blockReason` - Content was blocked by safety filters
-2. `finishReason !== FinishReason.STOP` - Generation incomplete (MAX_TOKENS, SAFETY, etc.)
+2. `finishReason !== FinishReason.STOP` - Generation incomplete (MAX_TOKENS, SAFETY, OTHER, etc.)
+
+### Automatic Seed Retry for "OTHER" Errors
+
+When Gemini TTS returns `finishReason: OTHER`, the system automatically retries with an incremented seed:
+- Original attempt uses seed `N`
+- Retry 1 uses seed `N + 1`
+- Retry 2 uses seed `N + 2`
+- Retry 3 uses seed `N + 3`
+- After 4 total attempts, returns the error
+
+A warning message is printed to stderr:
+```
+⚠️  Generation failed with OTHER, retrying with seed 101 (attempt 2/4)
+```
+
+This behavior is implemented in both `generateAudio` and `generateMultiSpeaker` methods in `tts-provider.ts`.
 
 ### File Naming
 

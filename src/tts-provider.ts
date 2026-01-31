@@ -12,7 +12,7 @@ import {
   HarmBlockThreshold,
 } from "@google/genai";
 import type { GenerateContentConfig } from "@google/genai";
-import { writeFile, stat, appendFile } from "fs/promises";
+import { writeFile, stat } from "fs/promises";
 import { dirname } from "path";
 import { mkdir } from "fs/promises";
 import type {
@@ -24,30 +24,7 @@ import type {
   Config,
 } from "./types.js";
 import { getVoiceConfig, resolveEnvVars } from "./config.js";
-
-// ============================================================================
-// Debug Logging
-// ============================================================================
-
-// Debug log file path - set TTS_DEBUG_LOG env var to enable file logging
-const DEBUG_LOG_FILE = process.env.TTS_DEBUG_LOG || null;
-
-export async function debugLog(message: string): Promise<void> {
-  const timestamp = new Date().toISOString();
-  const logMessage = `\n[${timestamp}]\n${message}\n`;
-
-  // Always write to stderr (won't be corrupted by progress bar as badly)
-  process.stderr.write(logMessage);
-
-  // Also write to file if configured
-  if (DEBUG_LOG_FILE) {
-    try {
-      await appendFile(DEBUG_LOG_FILE, logMessage);
-    } catch {
-      // Ignore file write errors
-    }
-  }
-}
+import { debugLog } from "./utils.js";
 
 // ============================================================================
 // Abstract TTS Provider Interface
@@ -323,156 +300,191 @@ export class GeminiTTSProvider implements TTSProvider {
     // Wait for rate limit slot
     await this.rateLimiter.waitForSlot();
 
-    try {
-      const result = await withRetry(
-        async () => {
-          const voiceName = request.voice.voiceName || "Zephyr";
-          const seed = request.voice.seed ?? this.globalSeed;
-          const genConfig: GenerateContentConfig = {
-            // temperature: 1,
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: voiceName,
+    // Track seed for retry with increment on "OTHER" finish reason
+    const baseSeed = request.voice.seed ?? this.globalSeed ?? 0;
+    let currentSeed = baseSeed;
+    const maxSeedRetries = 3;
+
+    for (let seedAttempt = 0; seedAttempt <= maxSeedRetries; seedAttempt++) {
+      try {
+        const result = await withRetry(
+          async () => {
+            const voiceName = request.voice.voiceName || "Zephyr";
+            const seed = currentSeed;
+            const genConfig: GenerateContentConfig = {
+              // temperature: 1,
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: voiceName,
+                  },
                 },
               },
-            },
-            safetySettings: [
+              safetySettings: [
+                {
+                  category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                  threshold: HarmBlockThreshold.BLOCK_NONE,
+                },
+              ],
+              seed,
+            };
+
+            const model = this.config.model || "gemini-2.5-pro-preview-tts";
+
+            // Build the prompt with style instructions
+            let textPrompt = request.text;
+            if (request.voice.stylePrompt) {
+              textPrompt = `${request.voice.stylePrompt}: ${request.text}`;
+            }
+
+            const contents = [
               {
-                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
+                parts: [{ text: textPrompt }],
               },
-            ],
-            seed,
+            ];
+
+            await debugLog(
+              "\n=== DEBUG: Text Prompt ===\n" +
+                `genConfig: ${JSON.stringify(genConfig)}\n` +
+                `Voice: ${request.voice.voiceName || "Zephyr"}\n` +
+                `Seed: ${seed}\n` +
+                textPrompt +
+                "\n=== END DEBUG ===\n",
+            );
+
+            const response = await this.client!.models.generateContent({
+              model,
+              config: genConfig,
+              contents,
+            });
+
+            // Check for blocked content or incomplete generation
+            const finishReason = response?.candidates?.[0]?.finishReason;
+            const blockReason = response?.promptFeedback?.blockReason;
+
+            if (blockReason) {
+              const debugInfo = {
+                blockReason,
+                promptFeedback: response?.promptFeedback,
+                candidates: response?.candidates?.map((c) => ({
+                  finishReason: c.finishReason,
+                  safetyRatings: c.safetyRatings,
+                })),
+                requestText: textPrompt,
+              };
+              await debugLog(
+                "\n=== DEBUG: Content Blocked ===\n" +
+                  JSON.stringify(debugInfo, null, 2) +
+                  "\n=== END DEBUG ===\n",
+              );
+
+              throw new Error(`Content blocked: ${blockReason}`);
+            }
+
+            if (finishReason && finishReason !== FinishReason.STOP) {
+              const debugInfo = {
+                finishReason,
+                promptFeedback: response?.promptFeedback,
+                candidates: response?.candidates?.map((c) => ({
+                  finishReason: c.finishReason,
+                  safetyRatings: c.safetyRatings,
+                  content: c.content
+                    ? { parts: c.content.parts?.length }
+                    : null,
+                })),
+                requestText: textPrompt,
+              };
+              await debugLog(
+                "\n=== DEBUG: Generation Incomplete ===\n" +
+                  JSON.stringify(debugInfo, null, 2) +
+                  "\n=== END DEBUG ===\n",
+              );
+
+              throw new Error(`Generation incomplete: ${finishReason}`);
+            }
+
+            // Extract audio data from response
+            const inlineData =
+              response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+
+            if (!inlineData?.data) {
+              return null;
+            }
+
+            const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
+
+            // Convert to WAV format
+            return convertToWav(inlineData.data, mimeType);
+          },
+          {
+            maxRetries: this.config.maxRetries ?? 3,
+            baseDelayMs: 1000,
+            maxDelayMs: 30000,
+          },
+        );
+
+        if (!result) {
+          return {
+            success: false,
+            error: "No audio data received from Gemini API",
           };
+        }
 
-          const model = this.config.model || "gemini-2.5-pro-preview-tts";
+        // Ensure output directory exists
+        await mkdir(dirname(request.outputPath), { recursive: true });
 
-          // Build the prompt with style instructions
-          let textPrompt = request.text;
-          if (request.voice.stylePrompt) {
-            textPrompt = `${request.voice.stylePrompt}: ${request.text}`;
-          }
+        // Write audio file
+        await writeFile(request.outputPath, result);
 
-          const contents = [
-            {
-              parts: [{ text: textPrompt }],
-            },
-          ];
+        // Get file stats
+        const fileStats = await stat(request.outputPath);
 
-          await debugLog(
-            "\n=== DEBUG: Text Prompt ===\n" +
-              `genConfig: ${JSON.stringify(genConfig)}\n` +
-              `Voice: ${request.voice.voiceName || "Zephyr"}\n` +
-              `Seed: ${seed}\n` +
-              textPrompt +
-              "\n=== END DEBUG ===\n",
+        // Estimate duration
+        const durationMs = estimateWavDuration(result);
+
+        return {
+          success: true,
+          audioPath: request.outputPath,
+          durationMs,
+          fileSize: fileStats.size,
+          audioData: result,
+        };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        // Check if this is a "Generation incomplete: OTHER" error that we can retry with a different seed
+        if (
+          errorMessage.includes("Generation incomplete: OTHER") &&
+          seedAttempt < maxSeedRetries
+        ) {
+          currentSeed = baseSeed + seedAttempt + 1;
+          console.error(
+            `\n⚠️  Generation failed with OTHER, retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
           );
+          await debugLog(
+            `\n=== DEBUG: Retrying with incremented seed ===\n` +
+              `Original seed: ${baseSeed}\n` +
+              `New seed: ${currentSeed}\n` +
+              `Attempt: ${seedAttempt + 2}/${maxSeedRetries + 1}\n` +
+              `=== END DEBUG ===\n`,
+          );
+          continue; // Try again with the new seed
+        }
 
-          const response = await this.client!.models.generateContent({
-            model,
-            config: genConfig,
-            contents,
-          });
-
-          // Check for blocked content or incomplete generation
-          const finishReason = response?.candidates?.[0]?.finishReason;
-          const blockReason = response?.promptFeedback?.blockReason;
-
-          if (blockReason) {
-            const debugInfo = {
-              blockReason,
-              promptFeedback: response?.promptFeedback,
-              candidates: response?.candidates?.map((c) => ({
-                finishReason: c.finishReason,
-                safetyRatings: c.safetyRatings,
-              })),
-              requestText: textPrompt,
-            };
-            await debugLog(
-              "\n=== DEBUG: Content Blocked ===\n" +
-                JSON.stringify(debugInfo, null, 2) +
-                "\n=== END DEBUG ===\n",
-            );
-
-            throw new Error(`Content blocked: ${blockReason}`);
-          }
-
-          if (finishReason && finishReason !== FinishReason.STOP) {
-            const debugInfo = {
-              finishReason,
-              promptFeedback: response?.promptFeedback,
-              candidates: response?.candidates?.map((c) => ({
-                finishReason: c.finishReason,
-                safetyRatings: c.safetyRatings,
-                content: c.content ? { parts: c.content.parts?.length } : null,
-              })),
-              requestText: textPrompt,
-            };
-            await debugLog(
-              "\n=== DEBUG: Generation Incomplete ===\n" +
-                JSON.stringify(debugInfo, null, 2) +
-                "\n=== END DEBUG ===\n",
-            );
-
-            throw new Error(`Generation incomplete: ${finishReason}`);
-          }
-
-          // Extract audio data from response
-          const inlineData =
-            response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-
-          if (!inlineData?.data) {
-            return null;
-          }
-
-          const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
-
-          // Convert to WAV format
-          return convertToWav(inlineData.data, mimeType);
-        },
-        {
-          maxRetries: this.config.maxRetries ?? 3,
-          baseDelayMs: 1000,
-          maxDelayMs: 30000,
-        },
-      );
-
-      if (!result) {
         return {
           success: false,
-          error: "No audio data received from Gemini API",
+          error: `Gemini TTS generation failed: ${errorMessage}`,
         };
       }
-
-      // Ensure output directory exists
-      await mkdir(dirname(request.outputPath), { recursive: true });
-
-      // Write audio file
-      await writeFile(request.outputPath, result);
-
-      // Get file stats
-      const fileStats = await stat(request.outputPath);
-
-      // Estimate duration
-      const durationMs = estimateWavDuration(result);
-
-      return {
-        success: true,
-        audioPath: request.outputPath,
-        durationMs,
-        fileSize: fileStats.size,
-        audioData: result,
-      };
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        error: `Gemini TTS generation failed: ${errorMessage}`,
-      };
     }
+
+    // Should not reach here, but just in case
+    return {
+      success: false,
+      error: `Gemini TTS generation failed after ${maxSeedRetries + 1} seed attempts`,
+    };
   }
 
   async generateMultiSpeaker(
@@ -485,140 +497,181 @@ export class GeminiTTSProvider implements TTSProvider {
     // Wait for rate limit slot
     await this.rateLimiter.waitForSlot();
 
-    try {
-      const result = await withRetry(
-        async () => {
-          // Build speaker voice configs
-          const speakerVoiceConfigs = Array.from(request.voices.entries()).map(
-            ([speaker, voice]) => ({
+    // Track seed for retry with increment on "OTHER" finish reason
+    const baseSeed = request.seed ?? this.globalSeed ?? 0;
+    let currentSeed = baseSeed;
+    const maxSeedRetries = 3;
+
+    for (let seedAttempt = 0; seedAttempt <= maxSeedRetries; seedAttempt++) {
+      try {
+        const result = await withRetry(
+          async () => {
+            // Build speaker voice configs
+            const speakerVoiceConfigs = Array.from(
+              request.voices.entries(),
+            ).map(([speaker, voice]) => ({
               speaker,
               voiceConfig: {
                 prebuiltVoiceConfig: {
                   voiceName: voice.voiceName || "Zephyr",
                 },
               },
-            }),
-          );
+            }));
 
-          const genConfig: GenerateContentConfig = {
-            temperature: 1,
-            responseModalities: ["audio"],
-            speechConfig: {
-              multiSpeakerVoiceConfig: {
-                speakerVoiceConfigs,
+            const genConfig: GenerateContentConfig = {
+              temperature: 1,
+              responseModalities: ["audio"],
+              speechConfig: {
+                multiSpeakerVoiceConfig: {
+                  speakerVoiceConfigs,
+                },
               },
-            },
-            seed: request.seed ?? this.globalSeed,
-            safetySettings: [
-              {
-                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-            ],
-          };
-
-          const model = this.config.model || "gemini-2.5-pro-preview-tts";
-
-          // Build the multi-speaker text prompt
-          const textContent = request.segments
-            .map((seg) => {
-              const voice = request.voices.get(seg.speaker);
-              const styleHint = voice?.stylePrompt
-                ? ` [Style: ${voice.stylePrompt}]`
-                : "";
-              return `${seg.speaker}:${styleHint} ${seg.text}`;
-            })
-            .join("\n\n");
-
-          const contents = [
-            {
-              role: "user" as const,
-              parts: [
+              seed: currentSeed,
+              safetySettings: [
                 {
-                  text: `Generate a multi-speaker audio with emotional depth for the following script:\n\n${textContent}`,
+                  category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                  threshold: HarmBlockThreshold.BLOCK_NONE,
                 },
               ],
-            },
-          ];
+            };
 
-          const response = await this.client!.models.generateContent({
-            model,
-            config: genConfig,
-            contents,
-          });
+            const model = this.config.model || "gemini-2.5-pro-preview-tts";
 
-          // Check for blocked content or incomplete generation
-          const finishReason = response?.candidates?.[0]?.finishReason;
-          const blockReason = response?.promptFeedback?.blockReason;
+            // Build the multi-speaker text prompt
+            const textContent = request.segments
+              .map((seg) => {
+                const voice = request.voices.get(seg.speaker);
+                const styleHint = voice?.stylePrompt
+                  ? ` [Style: ${voice.stylePrompt}]`
+                  : "";
+                return `${seg.speaker}:${styleHint} ${seg.text}`;
+              })
+              .join("\n\n");
 
-          if (blockReason) {
-            console.log(`request: ${contents}`);
-            console.log("Full response for debugging:", response);
+            const contents = [
+              {
+                role: "user" as const,
+                parts: [
+                  {
+                    text: `Generate a multi-speaker audio with emotional depth for the following script:\n\n${textContent}`,
+                  },
+                ],
+              },
+            ];
 
-            throw new Error(`Content blocked: ${blockReason}`);
-          }
+            await debugLog(
+              "\n=== DEBUG: Multi-Speaker Request ===\n" +
+                `Seed: ${currentSeed}\n` +
+                `Speakers: ${Array.from(request.voices.keys()).join(", ")}\n` +
+                `Segments: ${request.segments.length}\n` +
+                "\n=== END DEBUG ===\n",
+            );
 
-          if (finishReason && finishReason !== FinishReason.STOP) {
-            console.log(`request: ${contents}`);
-            console.log("Full response for debugging:", response);
+            const response = await this.client!.models.generateContent({
+              model,
+              config: genConfig,
+              contents,
+            });
 
-            throw new Error(`Generation incomplete: ${finishReason}`);
-          }
+            // Check for blocked content or incomplete generation
+            const finishReason = response?.candidates?.[0]?.finishReason;
+            const blockReason = response?.promptFeedback?.blockReason;
 
-          // Extract audio data from response
-          const inlineData =
-            response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+            if (blockReason) {
+              console.log(`request: ${contents}`);
+              console.log("Full response for debugging:", response);
 
-          if (!inlineData?.data) {
-            return null;
-          }
+              throw new Error(`Content blocked: ${blockReason}`);
+            }
 
-          const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
+            if (finishReason && finishReason !== FinishReason.STOP) {
+              console.log(`request: ${contents}`);
+              console.log("Full response for debugging:", response);
 
-          // Convert to WAV format
-          return convertToWav(inlineData.data, mimeType);
-        },
-        {
-          maxRetries: this.config.maxRetries ?? 3,
-          baseDelayMs: 1000,
-          maxDelayMs: 30000,
-        },
-      );
+              throw new Error(`Generation incomplete: ${finishReason}`);
+            }
 
-      if (!result) {
+            // Extract audio data from response
+            const inlineData =
+              response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+
+            if (!inlineData?.data) {
+              return null;
+            }
+
+            const mimeType = inlineData.mimeType || "audio/L16;rate=24000";
+
+            // Convert to WAV format
+            return convertToWav(inlineData.data, mimeType);
+          },
+          {
+            maxRetries: this.config.maxRetries ?? 3,
+            baseDelayMs: 1000,
+            maxDelayMs: 30000,
+          },
+        );
+
+        if (!result) {
+          return {
+            success: false,
+            error: "No audio data received from Gemini API",
+          };
+        }
+
+        // Ensure output directory exists
+        await mkdir(dirname(request.outputPath), { recursive: true });
+
+        // Write audio file
+        await writeFile(request.outputPath, result);
+
+        // Get file stats
+        const fileStats = await stat(request.outputPath);
+
+        // Estimate duration
+        const durationMs = estimateWavDuration(result);
+
+        return {
+          success: true,
+          audioPath: request.outputPath,
+          durationMs,
+          fileSize: fileStats.size,
+          audioData: result,
+        };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        // Check if this is a "Generation incomplete: OTHER" error that we can retry with a different seed
+        if (
+          errorMessage.includes("Generation incomplete: OTHER") &&
+          seedAttempt < maxSeedRetries
+        ) {
+          currentSeed = baseSeed + seedAttempt + 1;
+          console.error(
+            `\n⚠️  Multi-speaker generation failed with OTHER, retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
+          );
+          await debugLog(
+            `\n=== DEBUG: Retrying multi-speaker with incremented seed ===\n` +
+              `Original seed: ${baseSeed}\n` +
+              `New seed: ${currentSeed}\n` +
+              `Attempt: ${seedAttempt + 2}/${maxSeedRetries + 1}\n` +
+              `=== END DEBUG ===\n`,
+          );
+          continue; // Try again with the new seed
+        }
+
         return {
           success: false,
-          error: "No audio data received from Gemini API",
+          error: `Gemini multi-speaker TTS generation failed: ${errorMessage}`,
         };
       }
-
-      // Ensure output directory exists
-      await mkdir(dirname(request.outputPath), { recursive: true });
-
-      // Write audio file
-      await writeFile(request.outputPath, result);
-
-      // Get file stats
-      const fileStats = await stat(request.outputPath);
-
-      // Estimate duration
-      const durationMs = estimateWavDuration(result);
-
-      return {
-        success: true,
-        audioPath: request.outputPath,
-        durationMs,
-        fileSize: fileStats.size,
-        audioData: result,
-      };
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        error: `Gemini multi-speaker TTS generation failed: ${errorMessage}`,
-      };
     }
+
+    // Should not reach here, but just in case
+    return {
+      success: false,
+      error: `Gemini multi-speaker TTS generation failed after ${maxSeedRetries + 1} seed attempts`,
+    };
   }
 
   estimateCost(text: string): number | null {

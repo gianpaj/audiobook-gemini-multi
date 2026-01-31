@@ -56,6 +56,7 @@ import {
   getCacheSummary,
   getCacheStats,
   ensureCacheDir,
+  getCacheDir,
   hashText,
 } from "./cache.js";
 
@@ -65,6 +66,8 @@ import {
   formatDuration,
   type TTSProvider,
 } from "./tts-provider.js";
+
+import { setDebugLogCacheDir } from "./utils.js";
 
 import {
   convertToStoryFormat,
@@ -221,6 +224,8 @@ async function generateAudiobook(
 
   // Use story-specific cache folder
   await ensureCacheDir(outputDir, storyHash);
+  const cacheDir = getCacheDir(outputDir, storyHash);
+  setDebugLogCacheDir(cacheDir);
   printInfo(`Using cache folder: ${storyHash.substring(0, 8)}`);
 
   // Load or create cache manifest
