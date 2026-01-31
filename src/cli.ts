@@ -223,27 +223,32 @@ async function generateAudiobook(
   // Ensure output directory exists
   await mkdir(outputDir, { recursive: true });
 
-  // Generate story hash for story-specific cache folder
-  const storyHash = hashText(await readFile(storyPath, "utf-8"));
+  // Generate folder hash from filename (stable across content changes)
+  // and content hash for change detection in manifest
+  const storyBasename = basename(storyPath, extname(storyPath));
+  const folderHash = hashText(storyBasename);
+  const contentHash = hashText(await readFile(storyPath, "utf-8"));
   const configHash = hashConfig(config);
 
-  // Use story-specific cache folder
-  await ensureCacheDir(outputDir, storyHash);
-  const cacheDir = getCacheDir(outputDir, storyHash);
+  // Use filename-based cache folder for stability
+  await ensureCacheDir(outputDir, folderHash);
+  const cacheDir = getCacheDir(outputDir, folderHash);
   setDebugLogCacheDir(cacheDir);
-  printInfo(`Using cache folder: ${storyHash.substring(0, 8)}`);
+  printInfo(
+    `Using cache folder: ${folderHash.substring(0, 8)} (${storyBasename})`,
+  );
 
   // Load or create cache manifest
-  const loadedManifest = await loadCacheManifest(outputDir, storyHash);
+  const loadedManifest = await loadCacheManifest(outputDir, folderHash);
 
   if (
     options.force ||
     !loadedManifest ||
-    loadedManifest.storyHash !== storyHash ||
+    loadedManifest.storyHash !== contentHash ||
     loadedManifest.configHash !== configHash
   ) {
     if (loadedManifest && options.verbose) {
-      if (loadedManifest.storyHash !== storyHash) {
+      if (loadedManifest.storyHash !== contentHash) {
         printInfo("Story file changed, cache may be partially invalidated");
       }
       if (loadedManifest.configHash !== configHash) {
@@ -253,8 +258,9 @@ async function generateAudiobook(
   }
 
   // Manifest is always non-null after this point
+  // Use contentHash as storyHash in manifest for content change detection
   let manifest =
-    loadedManifest ?? createEmptyManifest(storyPath, storyHash, configHash);
+    loadedManifest ?? createEmptyManifest(storyPath, contentHash, configHash);
 
   // Try to recover cached segments from existing audio files if manifest is empty or incomplete
   if (!options.force && manifest.segments.length < segmentsToProcess.length) {
@@ -262,7 +268,7 @@ async function generateAudiobook(
       outputDir,
       segmentsToProcess,
       config,
-      storyHash,
+      folderHash,
     );
 
     if (recovered.length > 0) {
@@ -289,7 +295,7 @@ async function generateAudiobook(
         );
 
         // Save the updated manifest with recovered segments
-        await saveCacheManifest(outputDir, manifest, storyHash);
+        await saveCacheManifest(outputDir, manifest, folderHash);
       }
     }
   }
@@ -297,6 +303,14 @@ async function generateAudiobook(
   // Determine which segments need generation
   if (options.force) {
     printInfo("Force flag enabled - regenerating all segments");
+  }
+
+  // Update manifest hashes if they changed (content or config)
+  if (
+    manifest.storyHash !== contentHash ||
+    manifest.configHash !== configHash
+  ) {
+    manifest = { ...manifest, storyHash: contentHash, configHash };
   }
 
   const segmentsToGenerate = options.force
@@ -395,7 +409,7 @@ async function generateAudiobook(
           outputDir,
           segment.id,
           config.audio.format,
-          storyHash,
+          folderHash,
         );
 
         const response = await generateSegmentAudio(
@@ -442,10 +456,10 @@ async function generateAudiobook(
               timeTakenMs,
             });
 
-            // Log progress
+            // Log progress - show audio duration
             console.log(
               chalk.gray(
-                `  [${completed}/${total}] Generated ${segment.id} (${formatDuration(response.durationMs || 0)})`,
+                `  [${completed}/${total}] ${segment.id} - ${formatDuration(response.durationMs || 0)} audio`,
               ),
             );
 
@@ -453,18 +467,32 @@ async function generateAudiobook(
             completedSinceLastSave++;
             if (completedSinceLastSave >= 10) {
               completedSinceLastSave = 0;
-              await saveCacheManifest(outputDir, manifest, storyHash);
+              await saveCacheManifest(outputDir, manifest, folderHash);
             }
           }
         },
       },
     );
 
+    // Save manifest after all parallel processing completes
+    // This captures all successful segments, even if some failed
+    await saveCacheManifest(outputDir, manifest, folderHash);
+
     // Check for any failures
     const failures = processResults.filter((r) => !r.success);
     if (failures.length > 0) {
       const firstFailure = failures[0];
       const segment = firstFailure.item;
+      const successCount = processResults.filter((r) => r.success).length;
+
+      console.log(
+        chalk.red(
+          `\n✖ Generation failed after ${successCount}/${toGenerateCount} segments`,
+        ),
+      );
+      console.log(chalk.red(`  Failed segment: ${segment.id}`));
+      console.log(chalk.red(`  Error: ${firstFailure.error}`));
+
       exitWithError(
         `Failed to generate segment ${segment.id}:\n${firstFailure.error}`,
       );
@@ -474,7 +502,7 @@ async function generateAudiobook(
   // Add cached segments to results
   for (const { segment, cached } of cachedSegmentsInfo) {
     // Verify cached file still exists
-    const exists = await verifyCachedSegment(outputDir, cached, storyHash);
+    const exists = await verifyCachedSegment(outputDir, cached, folderHash);
     if (exists) {
       segmentResults.push({
         segment,
@@ -493,7 +521,7 @@ async function generateAudiobook(
   }
 
   // Save final manifest
-  await saveCacheManifest(outputDir, manifest, storyHash);
+  await saveCacheManifest(outputDir, manifest, folderHash);
 
   // Sort results by segment index
   segmentResults.sort((a, b) => a.segment.index - b.segment.index);
@@ -848,11 +876,12 @@ program
       const story = await parseFile(storyFile);
       const outputDir = options.output || getDefaultOutputDir();
 
-      // Generate story hash for story-specific cache folder
-      const storyHash = hashText(await readFile(storyFile, "utf-8"));
+      // Generate folder hash from filename (stable across content changes)
+      const storyBasename = basename(storyFile, extname(storyFile));
+      const folderHash = hashText(storyBasename);
 
       // Load cache manifest
-      const manifest = await loadCacheManifest(outputDir, storyHash);
+      const manifest = await loadCacheManifest(outputDir, folderHash);
       if (!manifest) {
         printInfo("No cache found. Running full generation...");
         const timestamp = Date.now().toString();
@@ -1002,14 +1031,17 @@ program
     console.log(chalk.cyan("\n=== Cache ==="));
     const outputDir = options.output || getDefaultOutputDir();
 
-    // If story file provided, use story-specific cache
-    let storyHash: string | undefined;
+    // If story file provided, use story-specific cache (filename-based folder hash)
+    let folderHash: string | undefined;
     if (storyFile && (await fileExists(storyFile))) {
-      storyHash = hashText(await readFile(storyFile, "utf-8"));
-      console.log(`Cache folder: ${storyHash.substring(0, 8)}`);
+      const storyBasename = basename(storyFile, extname(storyFile));
+      folderHash = hashText(storyBasename);
+      console.log(
+        `Cache folder: ${folderHash.substring(0, 8)} (${storyBasename})`,
+      );
     }
 
-    const manifest = await loadCacheManifest(outputDir, storyHash);
+    const manifest = await loadCacheManifest(outputDir, folderHash);
     if (manifest) {
       const stats = getCacheStats(manifest);
       console.log(`Cached segments: ${stats.cachedCount}`);
