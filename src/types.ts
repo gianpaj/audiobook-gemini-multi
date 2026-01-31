@@ -330,6 +330,8 @@ export interface TTSRequest {
   outputPath: string;
   /** Request timeout in milliseconds */
   timeout?: number;
+  /** Segment ID for logging purposes */
+  segmentId?: string;
 }
 
 /**

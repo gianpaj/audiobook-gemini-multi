@@ -111,19 +111,30 @@ Always check Gemini API responses for:
 1. `blockReason` - Content was blocked by safety filters
 2. `finishReason !== FinishReason.STOP` - Generation incomplete (MAX_TOKENS, SAFETY, OTHER, etc.)
 
-### Automatic Seed Retry for "OTHER" Errors
+### Automatic Seed Retry for "OTHER" and Transient Errors
 
-When Gemini TTS returns `finishReason: OTHER`, the system automatically retries with an incremented seed:
+When Gemini TTS returns `finishReason: OTHER` or encounters transient network errors, the system automatically retries with an incremented seed:
 - Original attempt uses seed `N`
 - Retry 1 uses seed `N + 1`
 - Retry 2 uses seed `N + 2`
 - Retry 3 uses seed `N + 3`
 - After 4 total attempts, returns the error
 
-A warning message is printed to stderr:
+Transient errors that trigger seed retry include:
+- `fetch failed` - Network request failures
+- `network` - General network errors
+- `ECONNRESET` - Connection reset
+- `ETIMEDOUT` - Connection timeout
+- `socket` - Socket errors
+- `500` - Internal server errors
+
+A warning message is printed to stderr (including segment ID when available):
 ```
-⚠️  Generation failed with OTHER, retrying with seed 101 (attempt 2/4)
+⚠️  Generation failed with OTHER [seg_0026_8ef0dbfd], retrying with seed 101 (attempt 2/4)
+⚠️  Generation failed with transient error [seg_0026_8ef0dbfd], retrying with seed 102 (attempt 3/4)
 ```
+
+For transient errors, a 2-second delay is added before retrying.
 
 This behavior is implemented in both `generateAudio` and `generateMultiSpeaker` methods in `tts-provider.ts`.
 

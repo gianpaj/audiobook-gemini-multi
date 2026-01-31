@@ -475,6 +475,70 @@ describe("tts-provider", () => {
         consoleErrorSpy.mockRestore();
       });
 
+      it("should retry with incremented seed on transient network errors", async () => {
+        // Track how many times generateContent is called
+        let callCount = 0;
+
+        mockGenerateContent.mockImplementation(async () => {
+          callCount++;
+          // Fail with network error on first 2 attempts, succeed on 3rd
+          if (callCount <= 2) {
+            throw new Error("fetch failed sending request");
+          }
+          // Succeed on 3rd attempt
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(500),
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0, // Disable normal retries, we're testing seed increment retry
+        });
+        await provider.initialize();
+
+        // Capture console.error output
+        const consoleErrorSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+
+        const response = await provider.generateAudio({
+          text: "Hello!",
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+        });
+
+        // Should succeed after retrying with different seeds
+        expect(response.success).toBe(true);
+        expect(callCount).toBe(3); // Failed twice, succeeded on 3rd
+
+        // Verify retry messages mention transient error
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("transient error"),
+        );
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("retrying with seed 101"),
+        );
+
+        consoleErrorSpy.mockRestore();
+        resetMockConfig();
+      });
+
       it("should write valid WAV file", async () => {
         const provider = new GeminiTTSProvider(MINIMAL_CONFIG.provider);
         await provider.initialize();

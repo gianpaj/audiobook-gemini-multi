@@ -346,6 +346,7 @@ export class GeminiTTSProvider implements TTSProvider {
 
             await debugLog(
               "\n=== DEBUG: Text Prompt ===\n" +
+                `Segment: ${request.segmentId || "unknown"}\n` +
                 `genConfig: ${JSON.stringify(genConfig)}\n` +
                 `Voice: ${request.voice.voiceName || "Zephyr"}\n` +
                 `Seed: ${seed}\n` +
@@ -365,6 +366,7 @@ export class GeminiTTSProvider implements TTSProvider {
 
             if (blockReason) {
               const debugInfo = {
+                segmentId: request.segmentId || "unknown",
                 blockReason,
                 promptFeedback: response?.promptFeedback,
                 candidates: response?.candidates?.map((c) => ({
@@ -384,6 +386,7 @@ export class GeminiTTSProvider implements TTSProvider {
 
             if (finishReason && finishReason !== FinishReason.STOP) {
               const debugInfo = {
+                segmentId: request.segmentId || "unknown",
                 finishReason,
                 promptFeedback: response?.promptFeedback,
                 candidates: response?.candidates?.map((c) => ({
@@ -454,22 +457,47 @@ export class GeminiTTSProvider implements TTSProvider {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
 
-        // Check if this is a "Generation incomplete: OTHER" error that we can retry with a different seed
+        // Check if we should retry with a different seed
+        // Retry on "Generation incomplete: OTHER" or transient errors (network, fetch failures, 500 errors)
+        const isOtherError = errorMessage.includes(
+          "Generation incomplete: OTHER",
+        );
+        const isTransientError =
+          errorMessage.toLowerCase().includes("fetch failed") ||
+          errorMessage.toLowerCase().includes("network") ||
+          errorMessage.toLowerCase().includes("econnreset") ||
+          errorMessage.toLowerCase().includes("etimedout") ||
+          errorMessage.toLowerCase().includes("socket") ||
+          errorMessage.includes('"code":500') ||
+          errorMessage.includes("code: 500") ||
+          errorMessage.includes("500");
+
         if (
-          errorMessage.includes("Generation incomplete: OTHER") &&
+          (isOtherError || isTransientError) &&
           seedAttempt < maxSeedRetries
         ) {
           currentSeed = baseSeed + seedAttempt + 1;
+          const reason = isOtherError ? "OTHER" : "transient error";
+          const segmentInfo = request.segmentId
+            ? ` [${request.segmentId}]`
+            : "";
           console.error(
-            `\n⚠️  Generation failed with OTHER, retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
+            `\n⚠️  Generation failed with ${reason}${segmentInfo}, retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
           );
           await debugLog(
             `\n=== DEBUG: Retrying with incremented seed ===\n` +
+              `Segment: ${request.segmentId || "unknown"}\n` +
               `Original seed: ${baseSeed}\n` +
               `New seed: ${currentSeed}\n` +
+              `Reason: ${reason}\n` +
+              `Error: ${errorMessage}\n` +
               `Attempt: ${seedAttempt + 2}/${maxSeedRetries + 1}\n` +
               `=== END DEBUG ===\n`,
           );
+          // Add a small delay before retrying on transient errors
+          if (isTransientError) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
           continue; // Try again with the new seed
         }
 
@@ -641,22 +669,43 @@ export class GeminiTTSProvider implements TTSProvider {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
 
-        // Check if this is a "Generation incomplete: OTHER" error that we can retry with a different seed
+        // Check if we should retry with a different seed
+        // Retry on "Generation incomplete: OTHER" or transient errors (network, fetch failures, 500 errors)
+        const isOtherError = errorMessage.includes(
+          "Generation incomplete: OTHER",
+        );
+        const isTransientError =
+          errorMessage.toLowerCase().includes("fetch failed") ||
+          errorMessage.toLowerCase().includes("network") ||
+          errorMessage.toLowerCase().includes("econnreset") ||
+          errorMessage.toLowerCase().includes("etimedout") ||
+          errorMessage.toLowerCase().includes("socket") ||
+          errorMessage.includes('"code":500') ||
+          errorMessage.includes("code: 500") ||
+          errorMessage.includes("500");
+
         if (
-          errorMessage.includes("Generation incomplete: OTHER") &&
+          (isOtherError || isTransientError) &&
           seedAttempt < maxSeedRetries
         ) {
           currentSeed = baseSeed + seedAttempt + 1;
+          const reason = isOtherError ? "OTHER" : "transient error";
           console.error(
-            `\n⚠️  Multi-speaker generation failed with OTHER, retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
+            `\n⚠️  Multi-speaker generation failed with ${reason}, retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
           );
           await debugLog(
             `\n=== DEBUG: Retrying multi-speaker with incremented seed ===\n` +
               `Original seed: ${baseSeed}\n` +
               `New seed: ${currentSeed}\n` +
+              `Reason: ${reason}\n` +
+              `Error: ${errorMessage}\n` +
               `Attempt: ${seedAttempt + 2}/${maxSeedRetries + 1}\n` +
               `=== END DEBUG ===\n`,
           );
+          // Add a small delay before retrying on transient errors
+          if (isTransientError) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
           continue; // Try again with the new seed
         }
 
@@ -723,6 +772,7 @@ export async function generateSegmentAudio(
     voice: voiceConfig,
     outputPath,
     timeout: config.provider.timeout,
+    segmentId: segment.id,
   });
 }
 

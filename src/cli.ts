@@ -321,6 +321,16 @@ async function generateAudiobook(
   const segmentResults: SegmentGenerationResult[] = [];
   let totalAudioDurationMs = 0;
 
+  // Log segment generation summary
+  const totalSegments = segmentsToProcess.length;
+  const cachedCount = cachedSegmentsInfo.length;
+  const toGenerateCount = segmentsToGenerate.length;
+
+  console.log("\n" + chalk.cyan("Segment summary:"));
+  console.log(
+    `  Total: ${totalSegments} | Cached: ${chalk.green(cachedCount)} | To generate: ${chalk.yellow(toGenerateCount)}`,
+  );
+
   if (segmentsToGenerate.length > 0) {
     console.log("\n" + chalk.cyan("Generating audio segments..."));
 
