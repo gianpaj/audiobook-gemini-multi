@@ -33,6 +33,7 @@ Thumbs.db
 
 # Debug logs
 pnpm-debug.log*
+debug.log
 
 # TypeScript cache
 *.tsbuildinfo
