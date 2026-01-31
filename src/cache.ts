@@ -52,6 +52,13 @@ export function hashText(text: string): string {
 }
 
 /**
+ * Generate a short hash (8 characters) for use in folder names
+ */
+export function shortHash(text: string): string {
+  return createHash("md5").update(text).digest("hex").substring(0, 8);
+}
+
+/**
  * Generate a hash for a segment (text + voice config)
  */
 export function generateSegmentHash(
@@ -74,16 +81,24 @@ export function generateSegmentHash(
 
 /**
  * Get the cache directory path for a project
+ * If storyHash is provided, creates a story-specific subfolder
  */
-export function getCacheDir(outputDir: string): string {
+export function getCacheDir(outputDir: string, storyHash?: string): string {
+  if (storyHash) {
+    const shortStoryHash = storyHash.substring(0, 8);
+    return join(outputDir, CACHE_DIR_NAME, shortStoryHash);
+  }
   return join(outputDir, CACHE_DIR_NAME);
 }
 
 /**
  * Get the cache manifest path
  */
-export function getCacheManifestPath(outputDir: string): string {
-  return join(getCacheDir(outputDir), CACHE_MANIFEST_NAME);
+export function getCacheManifestPath(
+  outputDir: string,
+  storyHash?: string,
+): string {
+  return join(getCacheDir(outputDir, storyHash), CACHE_MANIFEST_NAME);
 }
 
 /**
@@ -93,8 +108,13 @@ export function getCachedSegmentPath(
   outputDir: string,
   segmentId: string,
   format: string = "wav",
+  storyHash?: string,
 ): string {
-  return join(getCacheDir(outputDir), "segments", `${segmentId}.${format}`);
+  return join(
+    getCacheDir(outputDir, storyHash),
+    "segments",
+    `${segmentId}.${format}`,
+  );
 }
 
 /**
@@ -112,8 +132,11 @@ async function fileExists(path: string): Promise<boolean> {
 /**
  * Ensure cache directory structure exists
  */
-export async function ensureCacheDir(outputDir: string): Promise<void> {
-  const cacheDir = getCacheDir(outputDir);
+export async function ensureCacheDir(
+  outputDir: string,
+  storyHash?: string,
+): Promise<void> {
+  const cacheDir = getCacheDir(outputDir, storyHash);
   const segmentsDir = join(cacheDir, "segments");
 
   await mkdir(cacheDir, { recursive: true });
@@ -151,8 +174,9 @@ export function createEmptyManifest(
  */
 export async function loadCacheManifest(
   outputDir: string,
+  storyHash?: string,
 ): Promise<CacheManifest | null> {
-  const manifestPath = getCacheManifestPath(outputDir);
+  const manifestPath = getCacheManifestPath(outputDir, storyHash);
 
   if (!(await fileExists(manifestPath))) {
     return null;
@@ -183,9 +207,10 @@ export async function loadCacheManifest(
 export async function saveCacheManifest(
   outputDir: string,
   manifest: CacheManifest,
+  storyHash?: string,
 ): Promise<void> {
-  await ensureCacheDir(outputDir);
-  const manifestPath = getCacheManifestPath(outputDir);
+  await ensureCacheDir(outputDir, storyHash);
+  const manifestPath = getCacheManifestPath(outputDir, storyHash);
 
   manifest.lastUpdated = new Date().toISOString();
   const content = JSON.stringify(manifest, null, 2);
@@ -229,13 +254,10 @@ export function isSegmentCached(
 export async function verifyCachedSegment(
   outputDir: string,
   cached: CachedSegment,
+  storyHash?: string,
 ): Promise<boolean> {
-  const audioPath = join(
-    outputDir,
-    CACHE_DIR_NAME,
-    "segments",
-    basename(cached.audioPath),
-  );
+  const cacheDir = getCacheDir(outputDir, storyHash);
+  const audioPath = join(cacheDir, "segments", basename(cached.audioPath));
   return fileExists(audioPath);
 }
 
@@ -443,10 +465,13 @@ export function getCacheStats(manifest: CacheManifest | null): {
 }
 
 /**
- * Clear all cache for a project
+ * Clear all cache for a project (or a specific story's cache)
  */
-export async function clearCache(outputDir: string): Promise<void> {
-  const cacheDir = getCacheDir(outputDir);
+export async function clearCache(
+  outputDir: string,
+  storyHash?: string,
+): Promise<void> {
+  const cacheDir = getCacheDir(outputDir, storyHash);
 
   if (!(await fileExists(cacheDir))) {
     return;
@@ -462,7 +487,7 @@ export async function clearCache(outputDir: string): Promise<void> {
   }
 
   // Delete the manifest
-  const manifestPath = getCacheManifestPath(outputDir);
+  const manifestPath = getCacheManifestPath(outputDir, storyHash);
   if (await fileExists(manifestPath)) {
     await unlink(manifestPath);
   }
@@ -471,8 +496,11 @@ export async function clearCache(outputDir: string): Promise<void> {
 /**
  * Get cache directory size in bytes
  */
-export async function getCacheDirSize(outputDir: string): Promise<number> {
-  const cacheDir = getCacheDir(outputDir);
+export async function getCacheDirSize(
+  outputDir: string,
+  storyHash?: string,
+): Promise<number> {
+  const cacheDir = getCacheDir(outputDir, storyHash);
 
   if (!(await fileExists(cacheDir))) {
     return 0;

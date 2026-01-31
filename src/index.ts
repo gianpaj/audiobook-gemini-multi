@@ -84,6 +84,7 @@ export {
 // Export cache functions
 export {
   hashText,
+  shortHash,
   generateSegmentHash,
   getCacheDir,
   getCacheManifestPath,
