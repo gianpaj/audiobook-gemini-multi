@@ -145,3 +145,19 @@ Output files include timestamps for iteration:
 {storyname}_{timestamp}_audiobook.wav
 {storyname}_{timestamp}_manifest.json
 ```
+
+### Cache System Details
+
+**Filename-based cache folders**: The cache folder for each story is based on a hash of the filename (e.g., `maya-window-peek_converted`), not the file content. This means the cache folder stays the same when you re-run generation, making it easier to iterate.
+
+**Cache preservation**: Changing the storyHash or configHash no longer invalidates the entire cache. The system updates those values in the manifest but keeps existing segment audio files.
+
+**Cache recovery**: If the manifest has fewer segments than expected, or was lost entirely, the system automatically scans for existing audio files and recovers them into the manifest. This handles:
+- Lost manifest files
+- Interrupted processes before saving
+- Migration from older cache structures
+
+When recovery happens, you'll see a message like:
+```
+ℹ Recovered 15 cached segments from existing audio files
+```

@@ -364,15 +364,24 @@ After generation, you'll find these files in the output directory:
 
 ```text
 output/
-├── .audiobook-cache/           # Cache directory
-│   ├── manifest.json           # Cache manifest
-│   └── segments/               # Individual segment audio files
-│       ├── seg_0000_abc123.wav
-│       ├── seg_0001_def456.wav
-│       └── ...
-├── my-story_audiobook.wav      # Final stitched audiobook
-└── my-story_manifest.json      # Manifest with timestamps
+├── .audiobook-cache/                    # Cache directory
+│   └── a1b2c3d4/                        # Story-specific cache (8-char hash of filename)
+│       ├── manifest.json                # Cache manifest for this story
+│       ├── debug.log                    # Debug logs for TTS requests
+│       └── segments/                    # Individual segment audio files
+│           ├── seg_0000_abc123.wav
+│           ├── seg_0001_def456.wav
+│           └── ...
+├── my-story_20240115_103000_audiobook.wav    # Final stitched audiobook (with timestamp)
+└── my-story_20240115_103000_manifest.json    # Manifest with timestamps
 ```
+
+Each story file gets its own cache folder based on an 8-character hash of the filename. When running `preview` or `generate`, you'll see:
+```
+ℹ Using cache folder: a1b2c3d4
+```
+
+This means different stories won't share cache, and you can iterate on multiple stories independently.
 
 ### Manifest Format
 
@@ -459,15 +468,27 @@ The generator automatically handles rate limiting, but if you see persistent err
 
 ### "Generation failed"
 
-Check the verbose output with `-v` flag for more details. The generator will retry failed requests automatically.
+Check the verbose output with `-v` flag for more details. The generator automatically retries failed requests with an incremented seed value. This handles:
+
+- Transient network errors (connection reset, timeout, etc.)
+- API responses with `finishReason: OTHER`
+- Internal server errors (500)
+
+You'll see warning messages when retries happen:
+```
+⚠️  Generation failed with OTHER [seg_0026_8ef0dbfd], retrying with seed 101 (attempt 2/4)
+```
+
+Debug logs are written to the cache folder's `debug.log` file for troubleshooting.
 
 ### Cached files are being regenerated
 
-The cache is invalidated when:
+Individual segments are regenerated when:
 
-- The story text for a segment changes
-- The voice configuration for a speaker changes
-- The config.json is modified
+- The story text for that segment changes
+- The voice configuration for that speaker changes
+
+Note: Changing `config.json` or the story file structure no longer invalidates the entire cache. Only segments with actual text or voice changes are regenerated. The system also automatically recovers cached audio files if the manifest is lost or corrupted.
 
 Use `--force` only when you explicitly want to regenerate everything.
 

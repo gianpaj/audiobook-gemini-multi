@@ -334,8 +334,9 @@ export class GeminiTTSProvider implements TTSProvider {
 
             // Build the prompt with style instructions
             let textPrompt = request.text;
-            if (request.voice.stylePrompt) {
-              textPrompt = `${request.voice.stylePrompt}: ${request.text}`;
+            const stylePrompt = request.voice.stylePrompt;
+            if (stylePrompt) {
+              textPrompt = `${stylePrompt}: ${request.text}`;
             }
 
             const contents = [
@@ -350,7 +351,9 @@ export class GeminiTTSProvider implements TTSProvider {
                 `genConfig: ${JSON.stringify(genConfig)}\n` +
                 `Voice: ${request.voice.voiceName || "Zephyr"}\n` +
                 `Seed: ${seed}\n` +
-                textPrompt +
+                request.text.slice(0, 100) +
+                "\n" +
+                stylePrompt?.slice(0, 100) +
                 "\n=== END DEBUG ===\n",
             );
 
