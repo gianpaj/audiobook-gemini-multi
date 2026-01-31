@@ -5,9 +5,14 @@
  * implementation for Google's Gemini TTS API
  */
 
-import { GoogleGenAI, FinishReason } from "@google/genai";
+import {
+  GoogleGenAI,
+  FinishReason,
+  HarmCategory,
+  HarmBlockThreshold,
+} from "@google/genai";
 import type { GenerateContentConfig } from "@google/genai";
-import { writeFile, stat } from "fs/promises";
+import { writeFile, stat, appendFile } from "fs/promises";
 import { dirname } from "path";
 import { mkdir } from "fs/promises";
 import type {
@@ -19,6 +24,30 @@ import type {
   Config,
 } from "./types.js";
 import { getVoiceConfig, resolveEnvVars } from "./config.js";
+
+// ============================================================================
+// Debug Logging
+// ============================================================================
+
+// Debug log file path - set TTS_DEBUG_LOG env var to enable file logging
+const DEBUG_LOG_FILE = process.env.TTS_DEBUG_LOG || null;
+
+export async function debugLog(message: string): Promise<void> {
+  const timestamp = new Date().toISOString();
+  const logMessage = `\n[${timestamp}]\n${message}\n`;
+
+  // Always write to stderr (won't be corrupted by progress bar as badly)
+  process.stderr.write(logMessage);
+
+  // Also write to file if configured
+  if (DEBUG_LOG_FILE) {
+    try {
+      await appendFile(DEBUG_LOG_FILE, logMessage);
+    } catch {
+      // Ignore file write errors
+    }
+  }
+}
 
 // ============================================================================
 // Abstract TTS Provider Interface
@@ -297,17 +326,25 @@ export class GeminiTTSProvider implements TTSProvider {
     try {
       const result = await withRetry(
         async () => {
+          const voiceName = request.voice.voiceName || "Zephyr";
+          const seed = request.voice.seed ?? this.globalSeed;
           const genConfig: GenerateContentConfig = {
-            temperature: 1,
-            responseModalities: ["audio"],
+            // temperature: 1,
+            responseModalities: ["AUDIO"],
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: request.voice.voiceName || "Zephyr",
+                  voiceName: voiceName,
                 },
               },
             },
-            seed: request.voice.seed ?? this.globalSeed,
+            safetySettings: [
+              {
+                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold: HarmBlockThreshold.BLOCK_NONE,
+              },
+            ],
+            seed,
           };
 
           const model = this.config.model || "gemini-2.5-pro-preview-tts";
@@ -320,10 +357,18 @@ export class GeminiTTSProvider implements TTSProvider {
 
           const contents = [
             {
-              role: "user" as const,
               parts: [{ text: textPrompt }],
             },
           ];
+
+          await debugLog(
+            "\n=== DEBUG: Text Prompt ===\n" +
+              `genConfig: ${JSON.stringify(genConfig)}\n` +
+              `Voice: ${request.voice.voiceName || "Zephyr"}\n` +
+              `Seed: ${seed}\n` +
+              textPrompt +
+              "\n=== END DEBUG ===\n",
+          );
 
           const response = await this.client!.models.generateContent({
             model,
@@ -336,10 +381,41 @@ export class GeminiTTSProvider implements TTSProvider {
           const blockReason = response?.promptFeedback?.blockReason;
 
           if (blockReason) {
+            const debugInfo = {
+              blockReason,
+              promptFeedback: response?.promptFeedback,
+              candidates: response?.candidates?.map((c) => ({
+                finishReason: c.finishReason,
+                safetyRatings: c.safetyRatings,
+              })),
+              requestText: textPrompt,
+            };
+            await debugLog(
+              "\n=== DEBUG: Content Blocked ===\n" +
+                JSON.stringify(debugInfo, null, 2) +
+                "\n=== END DEBUG ===\n",
+            );
+
             throw new Error(`Content blocked: ${blockReason}`);
           }
 
           if (finishReason && finishReason !== FinishReason.STOP) {
+            const debugInfo = {
+              finishReason,
+              promptFeedback: response?.promptFeedback,
+              candidates: response?.candidates?.map((c) => ({
+                finishReason: c.finishReason,
+                safetyRatings: c.safetyRatings,
+                content: c.content ? { parts: c.content.parts?.length } : null,
+              })),
+              requestText: textPrompt,
+            };
+            await debugLog(
+              "\n=== DEBUG: Generation Incomplete ===\n" +
+                JSON.stringify(debugInfo, null, 2) +
+                "\n=== END DEBUG ===\n",
+            );
+
             throw new Error(`Generation incomplete: ${finishReason}`);
           }
 
@@ -433,6 +509,12 @@ export class GeminiTTSProvider implements TTSProvider {
               },
             },
             seed: request.seed ?? this.globalSeed,
+            safetySettings: [
+              {
+                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold: HarmBlockThreshold.BLOCK_NONE,
+              },
+            ],
           };
 
           const model = this.config.model || "gemini-2.5-pro-preview-tts";
@@ -470,10 +552,16 @@ export class GeminiTTSProvider implements TTSProvider {
           const blockReason = response?.promptFeedback?.blockReason;
 
           if (blockReason) {
+            console.log(`request: ${contents}`);
+            console.log("Full response for debugging:", response);
+
             throw new Error(`Content blocked: ${blockReason}`);
           }
 
           if (finishReason && finishReason !== FinishReason.STOP) {
+            console.log(`request: ${contents}`);
+            console.log("Full response for debugging:", response);
+
             throw new Error(`Generation incomplete: ${finishReason}`);
           }
 
