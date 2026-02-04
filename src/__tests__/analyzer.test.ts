@@ -5,8 +5,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import {
-  analyzeWithGemini,
-  analyzeWithGrok,
   analyzeStory,
   formatAnalysisResult,
   getSpeakerListForConvert,
@@ -14,6 +12,7 @@ import {
   getSupportedProviders,
   getDefaultModel,
   getApiKeyEnvVar,
+  getDefaultModelId,
   type AnalysisResult,
 } from "../analyzer.js";
 
@@ -48,9 +47,20 @@ vi.mock("@ai-sdk/google", () => {
   };
 });
 
-// Mock the ai SDK for Grok
+// Mock the ai SDK
 vi.mock("ai", () => {
   return {
+    createProviderRegistry: vi.fn((providers: Record<string, unknown>) => {
+      return {
+        languageModel: (modelId: string) => {
+          const [provider, model] = modelId.split(":");
+          if (!providers[provider]) {
+            throw new Error(`Provider ${provider} not found in registry`);
+          }
+          return { provider, model, modelId };
+        },
+      };
+    }),
     generateText: vi.fn(async () => {
       if (mockConfig.shouldFail) {
         throw new Error(mockConfig.failureMessage);
@@ -97,17 +107,30 @@ describe("analyzer", () => {
     process.env = originalEnv;
   });
 
-  describe("analyzeWithGemini", () => {
-    it("should return error when no API key is provided", async () => {
+  describe("analyzeStory", () => {
+    it("should return error when no API key is provided for Gemini", async () => {
       delete process.env.GEMINI_API_KEY;
 
-      const result = await analyzeWithGemini("Some text");
+      const result = await analyzeStory("Some text");
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("API key is required");
+      expect(result.error).toContain("GEMINI_API_KEY");
     });
 
-    it("should successfully analyze text and return characters", async () => {
+    it("should return error when no API key is provided for Grok", async () => {
+      delete process.env.XAI_API_KEY;
+
+      const result = await analyzeStory("Some text", {
+        model: "grok:grok-4-1-fast-reasoning",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("API key is required");
+      expect(result.error).toContain("XAI_API_KEY");
+    });
+
+    it("should successfully analyze text and return characters with default model", async () => {
       setMockConfig({
         responseText: JSON.stringify({
           characters: [
@@ -133,7 +156,7 @@ describe("analyzer", () => {
         }),
       });
 
-      const result = await analyzeWithGemini("Sample story text");
+      const result = await analyzeStory("Sample story text");
 
       expect(result.success).toBe(true);
       expect(result.characters).toHaveLength(3);
@@ -144,6 +167,57 @@ describe("analyzer", () => {
       expect(result.characters?.[2].gender).toBe("male");
       expect(result.usage?.inputTokens).toBe(100);
       expect(result.usage?.outputTokens).toBe(50);
+      expect(result.model).toBe("gemini:gemini-3-pro-preview");
+    });
+
+    it("should use Grok when model is specified with grok prefix", async () => {
+      setMockConfig({
+        responseText: JSON.stringify({
+          characters: [
+            { name: "VILLAIN", gender: "female", confidence: "high" },
+          ],
+        }),
+      });
+
+      const result = await analyzeStory("Sample text", {
+        model: "grok:grok-4-1-fast-reasoning",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.characters?.[0].name).toBe("VILLAIN");
+      expect(result.model).toBe("grok:grok-4-1-fast-reasoning");
+    });
+
+    it("should use Gemini when model is specified with gemini prefix", async () => {
+      setMockConfig({
+        responseText: JSON.stringify({
+          characters: [{ name: "HERO", gender: "male", confidence: "high" }],
+        }),
+      });
+
+      const result = await analyzeStory("Sample text", {
+        model: "gemini:gemini-3-pro-preview",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.characters?.[0].name).toBe("HERO");
+      expect(result.model).toBe("gemini:gemini-3-pro-preview");
+    });
+
+    it("should infer provider from model name without prefix", async () => {
+      setMockConfig({
+        responseText: JSON.stringify({
+          characters: [{ name: "TEST", gender: "neutral", confidence: "high" }],
+        }),
+      });
+
+      // Model starting with "grok" should use grok provider
+      const result = await analyzeStory("Sample text", {
+        model: "grok-4-1-fast-reasoning",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.model).toBe("grok:grok-4-1-fast-reasoning");
     });
 
     it("should handle JSON wrapped in markdown code blocks", async () => {
@@ -152,7 +226,7 @@ describe("analyzer", () => {
           '```json\n{"characters": [{"name": "BOB", "gender": "male", "confidence": "high"}]}\n```',
       });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(true);
       expect(result.characters).toHaveLength(1);
@@ -162,7 +236,7 @@ describe("analyzer", () => {
     it("should return error when no content received", async () => {
       setMockConfig({ responseText: "" });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("No content received from LLM");
@@ -171,7 +245,7 @@ describe("analyzer", () => {
     it("should return error on invalid JSON response", async () => {
       setMockConfig({ responseText: "This is not valid JSON" });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Failed to parse LLM response");
@@ -182,7 +256,7 @@ describe("analyzer", () => {
         responseText: JSON.stringify({ something: "else" }),
       });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("missing characters array");
@@ -194,7 +268,7 @@ describe("analyzer", () => {
         failureMessage: "API rate limit exceeded",
       });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Analysis failed");
@@ -211,7 +285,7 @@ describe("analyzer", () => {
         }),
       });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(true);
       expect(result.characters?.[0].name).toBe("ALICE");
@@ -231,7 +305,7 @@ describe("analyzer", () => {
         }),
       });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(true);
       expect(result.characters?.[0].gender).toBe("female");
@@ -252,7 +326,7 @@ describe("analyzer", () => {
         }),
       });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(true);
       expect(result.characters?.[0].confidence).toBe("high");
@@ -272,185 +346,69 @@ describe("analyzer", () => {
         }),
       });
 
-      const result = await analyzeWithGemini("Sample text");
+      const result = await analyzeStory("Sample text");
 
       expect(result.success).toBe(true);
       expect(result.characters).toHaveLength(1);
       expect(result.characters?.[0].name).toBe("VALID");
     });
+  });
 
-    it("should use custom API key from options", async () => {
-      delete process.env.GEMINI_API_KEY;
+  describe("getSupportedProviders", () => {
+    it("should return list of supported providers", () => {
+      const providers = getSupportedProviders();
 
-      setMockConfig({
-        responseText: JSON.stringify({
-          characters: [{ name: "TEST", gender: "neutral", confidence: "high" }],
-        }),
-      });
-
-      const result = await analyzeWithGemini("Sample text", {
-        apiKey: "custom-key",
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.characters?.[0].name).toBe("TEST");
+      expect(providers).toContain("gemini");
+      expect(providers).toContain("grok");
+      expect(providers).toHaveLength(2);
     });
   });
 
-  describe("analyzeWithGrok", () => {
-    it("should return error when no API key is provided", async () => {
-      delete process.env.XAI_API_KEY;
+  describe("getDefaultModel", () => {
+    it("should return default model for Gemini", () => {
+      const model = getDefaultModel("gemini");
 
-      const result = await analyzeWithGrok("Some text");
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("API key is required");
+      expect(model).toBe("gemini-3-pro-preview");
     });
 
-    it("should successfully analyze text and return characters", async () => {
-      setMockConfig({
-        responseText: JSON.stringify({
-          characters: [
-            {
-              name: "NARRATOR",
-              gender: "neutral",
-              description: "Third person narrator",
-              confidence: "high",
-            },
-            {
-              name: "ALICE",
-              gender: "female",
-              description: "Main character",
-              confidence: "high",
-            },
-          ],
-        }),
-      });
+    it("should return default model for Grok", () => {
+      const model = getDefaultModel("grok");
 
-      const result = await analyzeWithGrok("Sample story text");
-
-      expect(result.success).toBe(true);
-      expect(result.characters).toHaveLength(2);
-      expect(result.characters?.[0].name).toBe("NARRATOR");
-      expect(result.characters?.[1].name).toBe("ALICE");
-      expect(result.characters?.[1].gender).toBe("female");
-      expect(result.provider).toBe("grok");
-    });
-
-    it("should handle API errors gracefully", async () => {
-      setMockConfig({
-        shouldFail: true,
-        failureMessage: "Grok API rate limit exceeded",
-      });
-
-      const result = await analyzeWithGrok("Sample text");
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("Analysis failed");
-      expect(result.error).toContain("Grok API rate limit exceeded");
-    });
-
-    it("should use custom API key from options", async () => {
-      delete process.env.XAI_API_KEY;
-
-      setMockConfig({
-        responseText: JSON.stringify({
-          characters: [{ name: "TEST", gender: "neutral", confidence: "high" }],
-        }),
-      });
-
-      const result = await analyzeWithGrok("Sample text", {
-        apiKey: "custom-xai-key",
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.characters?.[0].name).toBe("TEST");
+      expect(model).toBe("grok-4-1-fast-reasoning");
     });
   });
 
-  describe("analyzeStory", () => {
-    it("should use Gemini by default", async () => {
-      setMockConfig({
-        responseText: JSON.stringify({
-          characters: [{ name: "HERO", gender: "male", confidence: "high" }],
-        }),
-      });
+  describe("getApiKeyEnvVar", () => {
+    it("should return env var name for Gemini", () => {
+      const envVar = getApiKeyEnvVar("gemini");
 
-      const result = await analyzeStory("Sample text");
-
-      expect(result.success).toBe(true);
-      expect(result.characters?.[0].name).toBe("HERO");
-      expect(result.provider).toBe("gemini");
+      expect(envVar).toBe("GEMINI_API_KEY");
     });
 
-    it("should use Grok when provider is specified", async () => {
-      setMockConfig({
-        responseText: JSON.stringify({
-          characters: [
-            { name: "VILLAIN", gender: "female", confidence: "high" },
-          ],
-        }),
-      });
+    it("should return env var name for Grok", () => {
+      const envVar = getApiKeyEnvVar("grok");
 
-      const result = await analyzeStory("Sample text", { provider: "grok" });
+      expect(envVar).toBe("XAI_API_KEY");
+    });
+  });
 
-      expect(result.success).toBe(true);
-      expect(result.characters?.[0].name).toBe("VILLAIN");
-      expect(result.provider).toBe("grok");
+  describe("getDefaultModelId", () => {
+    it("should return default model ID for Gemini", () => {
+      const modelId = getDefaultModelId("gemini");
+
+      expect(modelId).toBe("gemini:gemini-3-pro-preview");
     });
 
-    it("should use Gemini when provider is explicitly set", async () => {
-      setMockConfig({
-        responseText: JSON.stringify({
-          characters: [
-            { name: "SIDEKICK", gender: "neutral", confidence: "medium" },
-          ],
-        }),
-      });
+    it("should return default model ID for Grok", () => {
+      const modelId = getDefaultModelId("grok");
 
-      const result = await analyzeStory("Sample text", { provider: "gemini" });
-
-      expect(result.success).toBe(true);
-      expect(result.characters?.[0].name).toBe("SIDEKICK");
-      expect(result.provider).toBe("gemini");
+      expect(modelId).toBe("grok:grok-4-1-fast-reasoning");
     });
 
-    describe("getSupportedProviders", () => {
-      it("should return list of supported providers", () => {
-        const providers = getSupportedProviders();
+    it("should default to Gemini when no provider specified", () => {
+      const modelId = getDefaultModelId();
 
-        expect(providers).toContain("gemini");
-        expect(providers).toContain("grok");
-        expect(providers).toHaveLength(2);
-      });
-    });
-
-    describe("getDefaultModel", () => {
-      it("should return default model for Gemini", () => {
-        const model = getDefaultModel("gemini");
-
-        expect(model).toBe("gemini-2.5-flash");
-      });
-
-      it("should return default model for Grok", () => {
-        const model = getDefaultModel("grok");
-
-        expect(model).toBe("grok-3-fast");
-      });
-    });
-
-    describe("getApiKeyEnvVar", () => {
-      it("should return env var name for Gemini", () => {
-        const envVar = getApiKeyEnvVar("gemini");
-
-        expect(envVar).toBe("GEMINI_API_KEY");
-      });
-
-      it("should return env var name for Grok", () => {
-        const envVar = getApiKeyEnvVar("grok");
-
-        expect(envVar).toBe("XAI_API_KEY");
-      });
+      expect(modelId).toBe("gemini:gemini-3-pro-preview");
     });
   });
 

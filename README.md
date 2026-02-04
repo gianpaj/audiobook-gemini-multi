@@ -67,6 +67,102 @@ Lines starting with `#` or `//` are treated as comments and ignored.
 
 ## CLI Commands
 
+### `analyze <inputFile>`
+
+Analyze a story text file to identify characters and their likely gender using AI.
+
+```bash
+pnpm run analyze story.txt
+# Options:
+#   -m, --model <model>      Model to use in provider:model format (default: gemini:gemini-2.5-flash)
+#   --no-narrator            Exclude NARRATOR from analysis
+#   --suggest-voices         Suggest voices based on character genders
+#   --update-config [path]   Update config file with suggested voices (default: ./config.json)
+#   --json                   Output results as JSON
+#   --prompt-only            Show the AI prompt without calling the API
+#   -v, --verbose            Show token usage and model details
+```
+
+This command uses AI to analyze your text and identify:
+
+- Character names (in UPPERCASE, suitable for speaker tags)
+- Gender classification: `female`, `male`, or `neutral`
+- Confidence level: `high`, `medium`, or `low`
+- Brief character descriptions when detectable
+
+**Supported Providers:**
+
+| Provider | Default Model | API Key Variable |
+| -------- | ------------- | ---------------- |
+| `gemini` | `gemini-2.5-flash` | `GEMINI_API_KEY` |
+| `grok` | `grok-3-fast` | `XAI_API_KEY` |
+
+**Examples:**
+
+```bash
+# Use default (gemini:gemini-2.5-flash)
+pnpm run analyze story.txt
+
+# Use Grok (xAI) provider
+pnpm run analyze story.txt -m grok:grok-3-fast
+
+# Use specific Gemini model
+pnpm run analyze story.txt -m gemini:gemini-2.5-pro
+
+# Model names starting with provider name auto-detect provider
+pnpm run analyze story.txt -m grok-3-fast
+
+# Output as JSON for scripting
+pnpm run analyze story.txt --json
+
+# Preview the prompt without calling the API
+pnpm run analyze story.txt --prompt-only
+
+# Suggest voices based on character genders
+pnpm run analyze story.txt --suggest-voices
+
+# Analyze and automatically update config.json with voice suggestions
+pnpm run analyze story.txt --update-config
+
+# Update a specific config file
+pnpm run analyze story.txt --update-config ./my-config.json
+```
+
+The output includes a ready-to-use speaker list for the convert command:
+
+```txt
+Speaker list for convert command:
+  pnpm run convert story.txt -s "NARRATOR,ALICE,BOB"
+```
+
+**Voice Suggestions:**
+
+When using `--suggest-voices`, the command will suggest appropriate Gemini voices based on each character's detected gender:
+
+- Female characters → Female voices (Zephyr, Kore, Leda, Aoede, etc.)
+- Male characters → Male voices (Puck, Charon, Fenrir, Orus, etc.)
+- Neutral characters → Neutral voices (Pulcherrima, Achird, Vindemiatrix)
+
+Example output with `--suggest-voices`:
+
+```txt
+=== Voice Suggestions ===
+
+Female Characters:
+  ALICE → Zephyr (Bright, Higher pitch)
+  MARY → Kore (Firm, Middle pitch)
+
+Male Characters:
+  BOB → Puck (Upbeat, Middle pitch)
+
+Neutral Characters:
+  NARRATOR → Pulcherrima (Forward, Middle pitch)
+```
+
+When using `--update-config`, the suggested voices are automatically written to your config file, ready for audiobook generation.
+
+```txt
+
 ### `convert <inputFile>`
 
 Convert plain text or prose to speaker-tagged story format using AI.
@@ -377,7 +473,8 @@ output/
 ```
 
 Each story file gets its own cache folder based on an 8-character hash of the filename. When running `preview` or `generate`, you'll see:
-```
+
+```txt
 ℹ Using cache folder: a1b2c3d4
 ```
 
@@ -454,7 +551,8 @@ await stitchAudioFiles(audioFiles, 'output/audiobook.wav');
 
 | Variable | Description |
 | -------- | ----------- |
-| `GEMINI_API_KEY` | Your Google Gemini API key (used for both TTS and text conversion) |
+| `GEMINI_API_KEY` | Your Google Gemini API key (used for TTS, text conversion, and analyze with Gemini provider) |
+| `XAI_API_KEY` | Your xAI API key (used for analyze command with Grok provider) |
 
 ## Troubleshooting
 
@@ -475,7 +573,8 @@ Check the verbose output with `-v` flag for more details. The generator automati
 - Internal server errors (500)
 
 You'll see warning messages when retries happen:
-```
+
+```txt
 ⚠️  Generation failed with OTHER [seg_0026_8ef0dbfd], retrying with seed 101 (attempt 2/4)
 ```
 

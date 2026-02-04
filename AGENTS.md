@@ -6,7 +6,7 @@ This is a TypeScript CLI tool for generating audiobooks from story scripts using
 
 ## Project Structure
 
-```
+```text
 audiobook-gemini-multi/
 ├── src/
 │   ├── cli.ts           # Main CLI interface with all commands
@@ -58,31 +58,77 @@ Output includes:
 
 Options:
 
-- `--provider <provider>` - LLM provider to use: `gemini` (default) or `grok`
-- `--model <model>` - Model to use (provider-specific, e.g., `gemini-2.5-flash` or `grok-4-1-fast-reasoning`)
+- `-m, --model <model>` - Model to use in `provider:model` format (e.g., `gemini:gemini-3-pro-preview`, `grok:grok-4-1-fast-reasoning`)
 - `--no-narrator` - Exclude NARRATOR from analysis
+- `--suggest-voices` - Suggest Gemini voices based on character genders
+- `--update-config [path]` - Update config file with suggested voices (default: `./config.json`)
 - `--json` - Output results as JSON
 - `--prompt-only` - Show the AI prompt without calling the API
-- `-v, --verbose` - Show token usage and provider details
+- `-v, --verbose` - Show token usage and model details
 
 Examples:
 
 ```bash
-# Use default Gemini provider
+# Use default (grok:grok-4-1-fast-reasoning)
 pnpm run analyze story.txt
 
 # Use Grok (xAI) provider
-pnpm run analyze story.txt --provider grok
+pnpm run analyze story.txt -m grok:grok-4-1-fast-reasoning
 
-# Use specific model
-pnpm run analyze story.txt --provider grok --model grok-4-1-fast-reasoning
+# Use specific Gemini model
+pnpm run analyze story.txt -m gemini:gemini-3-pro-preview
+
+# Model names starting with provider name auto-detect provider
+pnpm run analyze story.txt -m grok-4-1-fast-reasoning
+
+# Suggest voices based on character genders
+pnpm run analyze story.txt --suggest-voices
+
+# Analyze and automatically update config.json with voice suggestions
+pnpm run analyze story.txt --update-config
+
+# Update a specific config file with voice suggestions
+pnpm run analyze story.txt --update-config ./my-config.json
 ```
+
+Supported providers:
+
+- `gemini` - Google Gemini (default: `gemini-3-pro-preview`)
+- `grok` - xAI Grok (default: `grok-4-1-fast-reasoning`)
 
 The output includes a ready-to-use speaker list for the convert command:
 
 ```bash
 pnpm run convert story.txt -s "NARRATOR,ALICE,BOB"
 ```
+
+### Voice Suggestions
+
+When using `--suggest-voices`, the analyze command suggests appropriate Gemini voices based on each character's detected gender:
+
+- Female characters → Female voices (Zephyr, Kore, Leda, Aoede, Sulafat, etc.)
+- Male characters → Male voices (Puck, Charon, Fenrir, Orus, Iapetus, etc.)
+- Neutral characters → Neutral voices (Pulcherrima, Achird, Vindemiatrix)
+
+The voice data is sourced from `gemini_voices.csv` which contains all 30 Gemini voices with their style, pitch, and gender attributes.
+
+Example output with `--suggest-voices`:
+
+```
+=== Voice Suggestions ===
+
+Female Characters:
+  ALICE → Zephyr (Bright, Higher pitch)
+  MARY → Kore (Firm, Middle pitch)
+
+Male Characters:
+  BOB → Puck (Upbeat, Middle pitch)
+
+Neutral Characters:
+  NARRATOR → Pulcherrima (Forward, Middle pitch)
+```
+
+When using `--update-config`, the suggested voices are automatically written to your config file with appropriate `voiceName` and `stylePrompt` values, ready for audiobook generation.
 
 ### Parallel Processing
 
@@ -99,6 +145,7 @@ Segment generation now runs in parallel for faster audiobook creation:
 ### CLI Argument Passing
 
 When passing arguments to pnpm scripts, do NOT use `--` before the arguments:
+
 ```bash
 # CORRECT:
 pnpm run preview story.txt -n 5 --force
@@ -110,12 +157,15 @@ pnpm run preview story.txt -- -n 5 --force
 ### Story Format
 
 The tool expects stories in speaker-tagged format:
-```
+
+```text
 [NARRATOR] Once upon a time...
 [ALICE] Hello there!
 ```
+
 or
-```
+
+```text
 NARRATOR: Once upon a time...
 ALICE: Hello there!
 ```
@@ -129,6 +179,7 @@ ALICE: Hello there!
 ### Debug Logging
 
 Debug logs are automatically written to `{outputDir}/.audiobook-cache/{storyHash}/debug.log` inside each story's cache folder. This includes:
+
 - TTS request details (voice, seed, text prompt)
 - API response information
 - Retry attempts with seed increments
@@ -151,7 +202,7 @@ You can also set `TTS_DEBUG_LOG` environment variable to write logs to an additi
 
 3. **Progress bar corrupting output**: Use `console.error()` or `process.stderr.write()` for debug output during generation
 
-4. **Cached segments used when --force specified**: Ensure the force flag is properly passed through the command chain
+4. **Cached segments used when `--force` specified**: Ensure the force flag is properly passed through the command chain
 
 ### Code Conventions
 
@@ -165,12 +216,14 @@ You can also set `TTS_DEBUG_LOG` environment variable to write logs to an additi
 ### API Response Handling
 
 Always check Gemini API responses for:
+
 1. `blockReason` - Content was blocked by safety filters
 2. `finishReason !== FinishReason.STOP` - Generation incomplete (MAX_TOKENS, SAFETY, OTHER, etc.)
 
 ### Automatic Seed Retry for "OTHER" and Transient Errors
 
 When Gemini TTS returns `finishReason: OTHER` or encounters transient network errors, the system automatically retries with an incremented seed:
+
 - Original attempt uses seed `N`
 - Retry 1 uses seed `N + 1`
 - Retry 2 uses seed `N + 2`
@@ -178,6 +231,7 @@ When Gemini TTS returns `finishReason: OTHER` or encounters transient network er
 - After 4 total attempts, returns the error
 
 Transient errors that trigger seed retry include:
+
 - `fetch failed` - Network request failures
 - `network` - General network errors
 - `ECONNRESET` - Connection reset
@@ -186,6 +240,7 @@ Transient errors that trigger seed retry include:
 - `500` - Internal server errors
 
 A warning message is printed to stderr (including segment ID when available):
+
 ```
 ⚠️  Generation failed with OTHER [seg_0026_8ef0dbfd], retrying with seed 101 (attempt 2/4)
 ⚠️  Generation failed with transient error [seg_0026_8ef0dbfd], retrying with seed 102 (attempt 3/4)
@@ -198,6 +253,7 @@ This behavior is implemented in both `generateAudio` and `generateMultiSpeaker` 
 ### File Naming
 
 Output files include timestamps for iteration:
+
 ```
 {storyname}_{timestamp}_audiobook.wav
 {storyname}_{timestamp}_manifest.json
@@ -215,6 +271,7 @@ Output files include timestamps for iteration:
 - Migration from older cache structures
 
 When recovery happens, you'll see a message like:
-```
+
+```text
 ℹ Recovered 15 cached segments from existing audio files
 ```

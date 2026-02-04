@@ -4,12 +4,17 @@
  * Uses LLM to analyze plain text/prose and identify characters,
  * including narrator, and their likely genders.
  *
- * Supports multiple providers via Vercel AI SDK: Gemini (default) and Grok (xAI)
+ * Supports multiple providers via Vercel AI SDK Provider Registry:
+ * - gemini: Google Gemini (default)
+ * - grok: xAI Grok
  */
 
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import {
+  createGoogleGenerativeAI,
+  GoogleGenerativeAIProviderOptions,
+} from "@ai-sdk/google";
 import { createXai } from "@ai-sdk/xai";
-import { generateText } from "ai";
+import { APICallError, createProviderRegistry, generateText } from "ai";
 
 // ============================================================================
 // Types
@@ -31,11 +36,7 @@ export interface Character {
 }
 
 export interface AnalysisOptions {
-  /** LLM provider to use (default: "gemini") */
-  provider?: AnalysisProvider;
-  /** API key for LLM provider */
-  apiKey?: string;
-  /** Model to use for analysis */
+  /** Model to use in format "provider:model" (e.g., "gemini:gemini-3-pro-preview" or "grok:grok-4-1-fast-reasoning") */
   model?: string;
   /** Whether to include narrator in the analysis */
   includeNarrator?: boolean;
@@ -53,8 +54,53 @@ export interface AnalysisResult {
     inputTokens: number;
     outputTokens: number;
   };
-  /** Provider used for analysis */
-  provider?: AnalysisProvider;
+  /** Model used for analysis (in provider:model format) */
+  model?: string;
+}
+
+// ============================================================================
+// Provider Registry
+// ============================================================================
+
+/**
+ * Default models for each provider
+ */
+const DEFAULT_MODELS: Record<AnalysisProvider, string> = {
+  gemini: "gemini-3-pro-preview",
+  grok: "grok-4-1-fast-reasoning",
+};
+
+/**
+ * Environment variable names for API keys
+ */
+const API_KEY_ENV_VARS: Record<AnalysisProvider, string> = {
+  gemini: "GEMINI_API_KEY",
+  grok: "XAI_API_KEY",
+};
+
+/**
+ * Create the provider registry with configured providers
+ * API keys are read from environment variables
+ */
+function createAnalyzerRegistry() {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  const xaiApiKey = process.env.XAI_API_KEY;
+
+  const providers: Record<
+    string,
+    ReturnType<typeof createGoogleGenerativeAI | typeof createXai>
+  > = {};
+
+  // Only register providers that have API keys configured
+  if (geminiApiKey) {
+    providers.gemini = createGoogleGenerativeAI({ apiKey: geminiApiKey });
+  }
+
+  if (xaiApiKey) {
+    providers.grok = createXai({ apiKey: xaiApiKey });
+  }
+
+  return createProviderRegistry(providers);
 }
 
 // ============================================================================
@@ -122,104 +168,88 @@ Respond with JSON only:`;
 // ============================================================================
 
 /**
- * Analyze text to identify characters and their genders using Gemini via AI SDK
+ * Parse a model string into provider and model parts
+ * Supports formats: "provider:model" or just "model" (uses default provider)
  */
-export async function analyzeWithGemini(
-  text: string,
-  options: AnalysisOptions = {},
-): Promise<AnalysisResult> {
-  const apiKey = options.apiKey || process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    return {
-      success: false,
-      error:
-        "API key is required. Set GEMINI_API_KEY environment variable or pass apiKey option.",
-    };
+function parseModelString(modelString: string): {
+  provider: AnalysisProvider;
+  model: string;
+} {
+  if (modelString.includes(":")) {
+    const [provider, model] = modelString.split(":", 2);
+    if (!getSupportedProviders().includes(provider as AnalysisProvider)) {
+      throw new Error(
+        `Unknown provider: ${provider}. Supported: ${getSupportedProviders().join(", ")}`,
+      );
+    }
+    return { provider: provider as AnalysisProvider, model };
   }
 
-  const model = options.model || "gemini-2.5-flash";
-
-  try {
-    const prompt = createAnalysisPrompt(text, options);
-
-    // Create Google provider with API key
-    const google = createGoogleGenerativeAI({ apiKey });
-
-    const result = await generateText({
-      model: google(model),
-      system: SYSTEM_PROMPT,
-      prompt,
-      temperature: 0.2, // Low temperature for consistent analysis
-    });
-
-    const content = result.text?.trim();
-
-    if (!content) {
-      return {
-        success: false,
-        error: "No content received from LLM",
-      };
-    }
-
-    // Parse JSON response
-    const parsed = parseAnalysisResponse(content);
-
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: parsed.error,
-      };
-    }
-
-    return {
-      success: true,
-      characters: parsed.characters,
-      usage: {
-        inputTokens: result.usage?.inputTokens || 0,
-        outputTokens: result.usage?.outputTokens || 0,
-      },
-      provider: "gemini",
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      error: `Analysis failed: ${errorMessage}`,
-    };
+  // No provider specified, try to infer from model name
+  if (modelString.startsWith("grok")) {
+    return { provider: "grok", model: modelString };
   }
+  if (modelString.startsWith("gemini")) {
+    return { provider: "gemini", model: modelString };
+  }
+
+  // Default to grok
+  return { provider: "grok", model: modelString };
 }
 
 /**
- * Analyze text to identify characters and their genders using Grok (xAI) via AI SDK
+ * Get the full model ID for the registry (provider:model format)
  */
-export async function analyzeWithGrok(
+function getFullModelId(options: AnalysisOptions): string {
+  if (options.model) {
+    const { provider, model } = parseModelString(options.model);
+    return `${provider}:${model}`;
+  }
+  // Default to grok with default model
+  return `grok:${DEFAULT_MODELS.grok}`;
+}
+
+/**
+ * Analyze text to identify characters and their genders
+ * Uses the provider registry for unified model access
+ */
+export async function analyzeStory(
   text: string,
   options: AnalysisOptions = {},
 ): Promise<AnalysisResult> {
-  const apiKey = options.apiKey || process.env.XAI_API_KEY;
+  const fullModelId = getFullModelId(options);
+  const { provider } = parseModelString(fullModelId);
 
-  if (!apiKey) {
+  // Check if API key is available
+  const apiKeyEnvVar = API_KEY_ENV_VARS[provider];
+  if (!process.env[apiKeyEnvVar]) {
     return {
       success: false,
-      error:
-        "API key is required. Set XAI_API_KEY environment variable or pass apiKey option.",
+      error: `API key is required. Set ${apiKeyEnvVar} environment variable.`,
     };
   }
 
-  const model = options.model || "grok-3-fast";
-
   try {
+    const registry = createAnalyzerRegistry();
     const prompt = createAnalysisPrompt(text, options);
 
-    // Create xAI provider with API key
-    const xai = createXai({ apiKey });
-
     const result = await generateText({
-      model: xai(model),
+      model: registry.languageModel(fullModelId as `${string}:${string}`),
       system: SYSTEM_PROMPT,
       prompt,
       temperature: 0.2, // Low temperature for consistent analysis
+      providerOptions: {
+        // Only `grok-3-mini` supports `reasoning_effort`
+        // xai: {
+        //   reasoningEffort: "high",
+        // } satisfies XaiProviderOptions,
+        google: {
+          thinkingConfig: {
+            thinkingLevel: "high",
+            includeThoughts: true,
+          },
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
     });
 
     const content = result.text?.trim();
@@ -248,13 +278,19 @@ export async function analyzeWithGrok(
         inputTokens: result.usage?.inputTokens || 0,
         outputTokens: result.usage?.outputTokens || 0,
       },
-      provider: "grok",
+      model: fullModelId,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    let errorMessage = error instanceof Error ? error.message : String(error);
+    // console.error(error);
+    if (error instanceof APICallError) {
+      errorMessage = error.responseBody
+        ? JSON.parse(error.responseBody).error
+        : errorMessage;
+    }
     return {
       success: false,
-      error: `Analysis failed: ${errorMessage}`,
+      error: errorMessage,
     };
   }
 }
@@ -360,24 +396,9 @@ function normalizeConfidence(value: unknown): "high" | "medium" | "low" {
   return "medium";
 }
 
-/**
- * Analyze text for characters - main entry point
- * Supports multiple providers via the provider option
- */
-export async function analyzeStory(
-  text: string,
-  options: AnalysisOptions = {},
-): Promise<AnalysisResult> {
-  const provider = options.provider || "gemini";
-
-  switch (provider) {
-    case "grok":
-      return analyzeWithGrok(text, options);
-    case "gemini":
-    default:
-      return analyzeWithGemini(text, options);
-  }
-}
+// ============================================================================
+// Display & Utility Functions
+// ============================================================================
 
 /**
  * Format analysis result for display
@@ -465,24 +486,19 @@ export function getSupportedProviders(): AnalysisProvider[] {
  * Get default model for a provider
  */
 export function getDefaultModel(provider: AnalysisProvider): string {
-  switch (provider) {
-    case "grok":
-      return "grok-3-fast";
-    case "gemini":
-    default:
-      return "gemini-2.5-flash";
-  }
+  return DEFAULT_MODELS[provider] || DEFAULT_MODELS.grok;
 }
 
 /**
  * Get the environment variable name for a provider's API key
  */
 export function getApiKeyEnvVar(provider: AnalysisProvider): string {
-  switch (provider) {
-    case "grok":
-      return "XAI_API_KEY";
-    case "gemini":
-    default:
-      return "GEMINI_API_KEY";
-  }
+  return API_KEY_ENV_VARS[provider] || API_KEY_ENV_VARS.gemini;
+}
+
+/**
+ * Get the default model ID in registry format (provider:model)
+ */
+export function getDefaultModelId(provider: AnalysisProvider = "grok"): string {
+  return `${provider}:${DEFAULT_MODELS[provider]}`;
 }

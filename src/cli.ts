@@ -12,7 +12,14 @@ import { Command } from "commander";
 import ora from "ora";
 import chalk from "chalk";
 
-import { readFile, access, mkdir, unlink, readdir } from "fs/promises";
+import {
+  readFile,
+  writeFile as writeFileFs,
+  access,
+  mkdir,
+  unlink,
+  readdir,
+} from "fs/promises";
 import { join, basename, extname } from "path";
 
 import type {
@@ -44,6 +51,13 @@ import {
   hashConfig,
   DEFAULT_CONFIG,
 } from "./config.js";
+
+import {
+  suggestVoicesForAnalysis,
+  formatVoiceSuggestions,
+  suggestionsToVoiceConfigs,
+  GEMINI_VOICES_DATA,
+} from "./voices.js";
 
 import {
   loadCacheManifest,
@@ -78,11 +92,8 @@ import {
   formatAnalysisResult,
   getSpeakerListForConvert,
   getAnalysisPrompt,
-  getSupportedProviders,
-  getDefaultModel,
-  getApiKeyEnvVar,
+  getDefaultModelId,
   type AnalysisOptions,
-  type AnalysisProvider,
 } from "./analyzer.js";
 
 import {
@@ -1198,6 +1209,7 @@ program
 
 /**
  * Analyze command - identify characters and genders in text
+ * Optionally suggests voices based on character gender and can update config
  */
 program
   .command("analyze <inputFile>")
@@ -1205,12 +1217,15 @@ program
     "Analyze a story/text file to identify characters and their genders",
   )
   .option(
-    "--provider <provider>",
-    "LLM provider to use: gemini or grok (default: gemini)",
-    "gemini",
+    "-m, --model <model>",
+    "Model to use in provider:model format (e.g., gemini:gemini-3-pro-preview, grok:grok-4-1-fast-reasoning)",
   )
-  .option("--model <model>", "Model to use (provider-specific)")
   .option("--no-narrator", "Exclude NARRATOR from analysis")
+  .option("--suggest-voices", "Suggest voices based on character genders")
+  .option(
+    "--update-config [path]",
+    "Update config file with suggested voices (default: ./config.json)",
+  )
   .option("--prompt-only", "Show the analysis prompt without calling the API")
   .option("-v, --verbose", "Verbose output", false)
   .option("--json", "Output results as JSON", false)
@@ -1228,17 +1243,7 @@ program
       const inputText = await readFile(inputFile, "utf-8");
       spinner.succeed(`Read ${inputText.length} characters from ${inputFile}`);
 
-      // Validate provider
-      const provider = options.provider as AnalysisProvider;
-      if (!getSupportedProviders().includes(provider)) {
-        spinner.fail(
-          `Invalid provider: ${provider}. Supported: ${getSupportedProviders().join(", ")}`,
-        );
-        process.exit(1);
-      }
-
       const analysisOptions: AnalysisOptions = {
-        provider,
         model: options.model,
         includeNarrator: options.narrator !== false,
       };
@@ -1258,10 +1263,8 @@ program
       }
 
       // Analyze the text
-      const modelInfo = options.model || getDefaultModel(provider);
-      spinner.start(
-        `Analyzing text for characters using ${provider} (${modelInfo})...`,
-      );
+      const modelInfo = options.model || getDefaultModelId();
+      spinner.start(`Analyzing text for characters using ${modelInfo}...`);
       const result = await analyzeStory(inputText, analysisOptions);
 
       if (!result.success) {
@@ -1270,15 +1273,33 @@ program
       }
 
       spinner.succeed(
-        `Found ${result.characters?.length || 0} character(s) using ${result.provider || provider}`,
+        `Found ${result.characters?.length || 0} character(s) using ${result.model || modelInfo}`,
       );
+
+      // Generate voice suggestions if requested
+      const voiceSuggestions =
+        options.suggestVoices || options.updateConfig
+          ? suggestVoicesForAnalysis(result)
+          : [];
 
       // Output results
       if (options.json) {
-        console.log(JSON.stringify(result.characters, null, 2));
+        const output: Record<string, unknown> = {
+          characters: result.characters,
+        };
+        if (voiceSuggestions.length > 0) {
+          output.voiceSuggestions = suggestionsToVoiceConfigs(voiceSuggestions);
+        }
+        console.log(JSON.stringify(output, null, 2));
       } else {
         console.log(chalk.cyan("\n=== Character Analysis ===\n"));
         console.log(formatAnalysisResult(result));
+
+        // Show voice suggestions if requested
+        if (voiceSuggestions.length > 0) {
+          console.log(chalk.cyan("=== Voice Suggestions ===\n"));
+          console.log(formatVoiceSuggestions(voiceSuggestions));
+        }
 
         // Show speakers list for convert command
         const speakersList = getSpeakerListForConvert(result);
@@ -1292,15 +1313,47 @@ program
 
         if (options.verbose) {
           console.log(chalk.cyan("\n=== Details ===\n"));
-          console.log(`  Provider: ${result.provider || provider}`);
-          console.log(
-            `  Model:    ${options.model || getDefaultModel(provider)}`,
-          );
-          console.log(`  API Key:  ${getApiKeyEnvVar(provider)}`);
+          console.log(`  Model: ${result.model || modelInfo}`);
           if (result.usage) {
             console.log(`  Input tokens:  ${result.usage.inputTokens}`);
             console.log(`  Output tokens: ${result.usage.outputTokens}`);
           }
+        }
+      }
+
+      // Update config if requested
+      if (options.updateConfig && voiceSuggestions.length > 0) {
+        const configPath =
+          typeof options.updateConfig === "string"
+            ? options.updateConfig
+            : "./config.json";
+
+        try {
+          let config: Config;
+
+          // Try to load existing config, or create new one
+          try {
+            config = await loadConfig(configPath);
+          } catch {
+            // Config doesn't exist, create from defaults
+            config = { ...DEFAULT_CONFIG };
+          }
+
+          // Update voices with suggestions
+          const newVoices = suggestionsToVoiceConfigs(voiceSuggestions);
+          config.voices = newVoices;
+
+          // Save config
+          await writeFileFs(configPath, JSON.stringify(config, null, 2));
+
+          console.log(chalk.green(`\n✓ Updated config file: ${configPath}`));
+          console.log(`  Added ${newVoices.length} voice configuration(s)`);
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            chalk.yellow(`\n⚠ Failed to update config: ${errorMsg}`),
+          );
         }
       }
     } catch (error) {
@@ -1317,29 +1370,45 @@ program
 program
   .command("voices")
   .description("List available TTS voices")
-  .action(() => {
-    console.log(chalk.cyan("\n=== Available Gemini Voices ===\n"));
-    const voices = [
-      "Zephyr - Balanced, clear narrator voice",
-      "Puck - Light, playful voice",
-      "Charon - Deep, authoritative voice",
-      "Kore - Warm, friendly female voice",
-      "Fenrir - Strong, dramatic voice",
-      "Leda - Soft, gentle voice",
-      "Orus - Mature, wise voice",
-      "Aoede - Musical, expressive voice",
-      "Callirrhoe - Clear, articulate voice",
-      "Autonoe - Energetic, youthful voice",
-      "Enceladus - Powerful, resonant voice",
-      "Iapetus - Deep, thoughtful voice",
-      "Umbriel - Mysterious, atmospheric voice",
-      "Algenib - Bright, engaging voice",
-    ];
-
-    for (const voice of voices) {
-      console.log(`  • ${voice}`);
+  .option("--json", "Output as JSON", false)
+  .action((options) => {
+    if (options.json) {
+      console.log(JSON.stringify(GEMINI_VOICES_DATA, null, 2));
+      return;
     }
 
+    console.log(chalk.cyan("\n=== Available Gemini Voices ===\n"));
+
+    // Group by gender
+    const femaleVoices = GEMINI_VOICES_DATA.filter(
+      (v) => v.gender === "Female",
+    );
+    const maleVoices = GEMINI_VOICES_DATA.filter((v) => v.gender === "Male");
+    const neutralVoices = GEMINI_VOICES_DATA.filter(
+      (v) => v.gender === "Neutral",
+    );
+
+    const formatVoice = (v: (typeof GEMINI_VOICES_DATA)[0]) =>
+      `  ${v.name.padEnd(14)} - ${v.style.padEnd(12)} (${v.pitch} pitch)`;
+
+    console.log(chalk.magenta("Female Voices:"));
+    for (const voice of femaleVoices) {
+      console.log(formatVoice(voice));
+    }
+
+    console.log(chalk.blue("\nMale Voices:"));
+    for (const voice of maleVoices) {
+      console.log(formatVoice(voice));
+    }
+
+    console.log(chalk.yellow("\nNeutral Voices:"));
+    for (const voice of neutralVoices) {
+      console.log(formatVoice(voice));
+    }
+
+    console.log(
+      `\nTotal: ${GEMINI_VOICES_DATA.length} voices (${femaleVoices.length} female, ${maleVoices.length} male, ${neutralVoices.length} neutral)`,
+    );
     console.log(
       "\nUse these voice names in your config.json 'voiceName' field.",
     );

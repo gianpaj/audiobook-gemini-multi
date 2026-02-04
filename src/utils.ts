@@ -130,6 +130,10 @@ export async function debugLog(message: string): Promise<void> {
   const timestamp = new Date().toISOString();
   const logMessage = `\n[${timestamp}]\n${message}\n`;
 
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
+
   // Always write to stderr (won't be corrupted by progress bar as badly)
   process.stderr.write(logMessage);
 

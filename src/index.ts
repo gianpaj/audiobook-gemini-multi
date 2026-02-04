@@ -168,20 +168,38 @@ export {
 // Export analyzer functions
 export {
   analyzeStory,
-  analyzeWithGemini,
-  analyzeWithGrok,
   formatAnalysisResult,
   getSpeakerListForConvert,
   getAnalysisPrompt,
   getSupportedProviders,
   getDefaultModel,
   getApiKeyEnvVar,
+  getDefaultModelId,
   type Gender,
   type Character,
   type AnalysisOptions,
   type AnalysisResult,
   type AnalysisProvider,
 } from "./analyzer.js";
+
+// Export voice suggestion functions
+export {
+  GEMINI_VOICES_DATA,
+  getVoicesByGender,
+  getFemaleVoices,
+  getMaleVoices,
+  getNeutralVoices,
+  getVoiceByName,
+  suggestVoiceForCharacter,
+  suggestVoicesForAnalysis,
+  formatVoiceSuggestions,
+  suggestionsToVoiceConfigs,
+  formatVoiceSuggestionsAsConfig,
+  type VoiceInfo,
+  type VoiceSuggestion,
+  type VoicePitch,
+  type VoiceGender,
+} from "./voices.js";
 
 // Re-export for convenience
 import { parseFile } from "./parser.js";
