@@ -348,7 +348,7 @@ export class GeminiTTSProvider implements TTSProvider {
             await debugLog(
               "\n=== DEBUG: Text Prompt ===\n" +
                 `Segment: ${request.segmentId || "unknown"}\n` +
-                `genConfig: ${JSON.stringify(genConfig)}\n` +
+                // `genConfig: ${JSON.stringify(genConfig)}\n` +
                 `Voice: ${request.voice.voiceName || "Zephyr"}\n` +
                 `Seed: ${seed}\n` +
                 request.text.slice(0, 100) +

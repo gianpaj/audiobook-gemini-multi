@@ -74,6 +74,18 @@ import {
 import { setDebugLogCacheDir, processWithConcurrency } from "./utils.js";
 
 import {
+  analyzeStory,
+  formatAnalysisResult,
+  getSpeakerListForConvert,
+  getAnalysisPrompt,
+  getSupportedProviders,
+  getDefaultModel,
+  getApiKeyEnvVar,
+  type AnalysisOptions,
+  type AnalysisProvider,
+} from "./analyzer.js";
+
+import {
   convertToStoryFormat,
   getConversionPrompt,
   validateConvertedContent,
@@ -1178,6 +1190,121 @@ program
       console.log(`  3. Generate audiobook: pnpm run generate ${outputPath}`);
     } catch (error) {
       spinner.fail("Conversion failed");
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      exitWithError(errorMessage);
+    }
+  });
+
+/**
+ * Analyze command - identify characters and genders in text
+ */
+program
+  .command("analyze <inputFile>")
+  .description(
+    "Analyze a story/text file to identify characters and their genders",
+  )
+  .option(
+    "--provider <provider>",
+    "LLM provider to use: gemini or grok (default: gemini)",
+    "gemini",
+  )
+  .option("--model <model>", "Model to use (provider-specific)")
+  .option("--no-narrator", "Exclude NARRATOR from analysis")
+  .option("--prompt-only", "Show the analysis prompt without calling the API")
+  .option("-v, --verbose", "Verbose output", false)
+  .option("--json", "Output results as JSON", false)
+  .action(async (inputFile: string, options) => {
+    const spinner = ora("Reading input file...").start();
+
+    try {
+      // Check if input file exists
+      if (!(await fileExists(inputFile))) {
+        spinner.fail(`Input file not found: ${inputFile}`);
+        process.exit(1);
+      }
+
+      // Read input file
+      const inputText = await readFile(inputFile, "utf-8");
+      spinner.succeed(`Read ${inputText.length} characters from ${inputFile}`);
+
+      // Validate provider
+      const provider = options.provider as AnalysisProvider;
+      if (!getSupportedProviders().includes(provider)) {
+        spinner.fail(
+          `Invalid provider: ${provider}. Supported: ${getSupportedProviders().join(", ")}`,
+        );
+        process.exit(1);
+      }
+
+      const analysisOptions: AnalysisOptions = {
+        provider,
+        model: options.model,
+        includeNarrator: options.narrator !== false,
+      };
+
+      // If prompt-only, just show the prompt
+      if (options.promptOnly) {
+        const { systemPrompt, userPrompt } = getAnalysisPrompt(
+          inputText,
+          analysisOptions,
+        );
+
+        console.log(chalk.cyan("\n=== System Prompt ===\n"));
+        console.log(systemPrompt);
+        console.log(chalk.cyan("\n=== User Prompt ===\n"));
+        console.log(userPrompt);
+        return;
+      }
+
+      // Analyze the text
+      const modelInfo = options.model || getDefaultModel(provider);
+      spinner.start(
+        `Analyzing text for characters using ${provider} (${modelInfo})...`,
+      );
+      const result = await analyzeStory(inputText, analysisOptions);
+
+      if (!result.success) {
+        spinner.fail(`Analysis failed: ${result.error}`);
+        process.exit(1);
+      }
+
+      spinner.succeed(
+        `Found ${result.characters?.length || 0} character(s) using ${result.provider || provider}`,
+      );
+
+      // Output results
+      if (options.json) {
+        console.log(JSON.stringify(result.characters, null, 2));
+      } else {
+        console.log(chalk.cyan("\n=== Character Analysis ===\n"));
+        console.log(formatAnalysisResult(result));
+
+        // Show speakers list for convert command
+        const speakersList = getSpeakerListForConvert(result);
+        if (speakersList) {
+          console.log(chalk.cyan("=== For Convert Command ===\n"));
+          console.log(`Speakers: ${speakersList}`);
+          console.log(
+            `\nUsage: pnpm run convert ${inputFile} -s "${speakersList}"`,
+          );
+        }
+
+        if (options.verbose) {
+          console.log(chalk.cyan("\n=== Details ===\n"));
+          console.log(`  Provider: ${result.provider || provider}`);
+          console.log(
+            `  Model:    ${options.model || getDefaultModel(provider)}`,
+          );
+          console.log(`  API Key:  ${getApiKeyEnvVar(provider)}`);
+          if (result.usage) {
+            console.log(`  Input tokens:  ${result.usage.inputTokens}`);
+            console.log(`  Output tokens: ${result.usage.outputTokens}`);
+          }
+        }
+      }
+    } catch (error) {
+      spinner.fail("Analysis failed");
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       exitWithError(errorMessage);

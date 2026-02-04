@@ -165,6 +165,24 @@ export {
   type ConversionResult,
 } from "./converter.js";
 
+// Export analyzer functions
+export {
+  analyzeStory,
+  analyzeWithGemini,
+  analyzeWithGrok,
+  formatAnalysisResult,
+  getSpeakerListForConvert,
+  getAnalysisPrompt,
+  getSupportedProviders,
+  getDefaultModel,
+  getApiKeyEnvVar,
+  type Gender,
+  type Character,
+  type AnalysisOptions,
+  type AnalysisResult,
+  type AnalysisProvider,
+} from "./analyzer.js";
+
 // Re-export for convenience
 import { parseFile } from "./parser.js";
 import { loadConfig, createConfigForSpeakers } from "./config.js";

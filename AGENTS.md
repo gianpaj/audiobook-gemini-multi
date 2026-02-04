@@ -34,11 +34,55 @@ audiobook-gemini-multi/
 - `pnpm run generate <storyFile>` - Generate full audiobook
 - `pnpm run generate <storyFile> -p 8` - Generate with 8 parallel workers
 - `pnpm run preview <storyFile> -n 5` - Generate preview (first N segments)
+- `pnpm run analyze <inputFile>` - Analyze text to identify characters and genders
 - `pnpm run convert <inputFile>` - Convert plain text to story format using AI
 - `pnpm run init <storyFile>` - Create config from story speakers
 - `pnpm run clean` - Clear cache and output files
 - `pnpm run test` - Run Vitest tests
 - `pnpm run typecheck` - Run TypeScript type checking
+
+### Analyze Command
+
+The `analyze` command uses AI to identify characters in a story and determine their likely gender:
+
+```bash
+pnpm run analyze story.txt
+```
+
+Output includes:
+
+- Character names (in UPPERCASE, suitable for speaker tags)
+- Gender classification: `female`, `male`, or `neutral`
+- Confidence level: `high`, `medium`, or `low`
+- Brief character descriptions when detectable
+
+Options:
+
+- `--provider <provider>` - LLM provider to use: `gemini` (default) or `grok`
+- `--model <model>` - Model to use (provider-specific, e.g., `gemini-2.5-flash` or `grok-4-1-fast-reasoning`)
+- `--no-narrator` - Exclude NARRATOR from analysis
+- `--json` - Output results as JSON
+- `--prompt-only` - Show the AI prompt without calling the API
+- `-v, --verbose` - Show token usage and provider details
+
+Examples:
+
+```bash
+# Use default Gemini provider
+pnpm run analyze story.txt
+
+# Use Grok (xAI) provider
+pnpm run analyze story.txt --provider grok
+
+# Use specific model
+pnpm run analyze story.txt --provider grok --model grok-4-1-fast-reasoning
+```
+
+The output includes a ready-to-use speaker list for the convert command:
+
+```bash
+pnpm run convert story.txt -s "NARRATOR,ALICE,BOB"
+```
 
 ### Parallel Processing
 
@@ -78,7 +122,8 @@ ALICE: Hello there!
 
 ### Environment Variables
 
-- `GEMINI_API_KEY` - Required for TTS generation and text conversion
+- `GEMINI_API_KEY` - Required for TTS generation, text conversion, and analyze command (with Gemini provider)
+- `XAI_API_KEY` - Required for analyze command when using Grok provider
 - `TTS_DEBUG_LOG` - Optional path to write debug logs to a file (legacy, for backwards compatibility)
 
 ### Debug Logging
@@ -93,13 +138,14 @@ You can also set `TTS_DEBUG_LOG` environment variable to write logs to an additi
 ### Testing
 
 - All tests use Vitest with mocked APIs
-- The `@google/genai` module is mocked in tests
+- The `@google/genai` module is mocked in tests for TTS provider
+- The `@ai-sdk/google` and `@ai-sdk/xai` modules are mocked in `src/__tests__/analyzer.test.ts`
 - When adding new imports from `@google/genai`, update the mock in `src/__tests__/tts-provider.test.ts`
 - File system is mocked using `memfs`
 
 ### Common Issues
 
-1. **Tests failing with "No export defined on mock"**: Add missing exports to the `vi.mock("@google/genai")` block in test files
+1. **Tests failing with "No export defined on mock"**: Add missing exports to the `vi.mock()` block in test files (e.g., `@google/genai` for TTS, `@ai-sdk/google` for analyzer)
 
 2. **`maxRetries: 0` not working**: Use nullish coalescing (`??`) not logical OR (`||`) for numeric options that can be 0
 
