@@ -250,6 +250,35 @@ For transient errors, a 2-second delay is added before retrying.
 
 This behavior is implemented in both `generateAudio` and `generateMultiSpeaker` methods in `tts-provider.ts`.
 
+### Automatic Retry for Excessive Audio Duration
+
+Sometimes the TTS model generates unexpectedly long audio for short text (e.g., style directives like `<conflicted, breathless>` generating 29 seconds of audio when it should be under 10 seconds). The system automatically detects and retries these cases:
+
+**Duration validation rules:**
+
+- Expected duration is estimated based on text length (8-20 characters per second)
+- Style directives like `<emotion>` are stripped when calculating expected duration
+- Audio is considered excessive if it exceeds `max_expected * 3` or 10 seconds minimum tolerance
+- **Style-only or very short texts (<10 chars after stripping directives) have a strict 5-second limit**
+- Absolute maximum of 2 minutes per segment regardless of text length
+
+**Retry behavior:**
+
+- When excessive duration is detected, retries with incremented seed (same as OTHER errors)
+- Up to 4 total attempts before accepting the result
+- If still excessive after all retries, a warning is logged but the audio is kept
+
+Example warning messages:
+
+```
+⚠️  Duration 29s exceeds 5s limit for short/style-only text (0 chars) [seg_0012_f425762d], retrying with seed 101 (attempt 2/4)
+⚠️  Duration 45s exceeds expected max of 12s (text: 50 chars) [seg_0026_abc123], retrying with seed 102 (attempt 3/4)
+```
+
+This prevents garbage audio from:
+- Style directives like `<breathing sounds>` confusing the model
+- The model generating extended silence or repeated content
+
 ### File Naming
 
 Output files include timestamps for iteration:
@@ -275,3 +304,11 @@ When recovery happens, you'll see a message like:
 ```text
 ℹ Recovered 15 cached segments from existing audio files
 ```
+
+**Missing file regeneration**: Before generation starts, the system verifies that all cached segment audio files actually exist on disk. If any are missing (e.g., deleted manually or due to the excessive duration retry), they are automatically added to the generation queue:
+
+```text
+⚠ Found 1 cached segment(s) with missing audio files - will regenerate
+```
+
+This ensures the final audiobook always includes all segments, even if some cached files were removed.

@@ -167,7 +167,7 @@ describe("analyzer", () => {
       expect(result.characters?.[2].gender).toBe("male");
       expect(result.usage?.inputTokens).toBe(100);
       expect(result.usage?.outputTokens).toBe(50);
-      expect(result.model).toBe("gemini:gemini-3-pro-preview");
+      expect(result.model).toBe("grok:grok-4-1-fast-reasoning");
     });
 
     it("should use Grok when model is specified with grok prefix", async () => {
@@ -408,7 +408,7 @@ describe("analyzer", () => {
     it("should default to Gemini when no provider specified", () => {
       const modelId = getDefaultModelId();
 
-      expect(modelId).toBe("gemini:gemini-3-pro-preview");
+      expect(modelId).toBe("grok:grok-4-1-fast-reasoning");
     });
   });
 

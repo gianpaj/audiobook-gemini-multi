@@ -549,6 +549,372 @@ describe("tts-provider", () => {
         vi.useRealTimers();
       });
 
+      it("should retry with different seed when duration is excessively long", async () => {
+        let callCount = 0;
+        const originalMockFn = mockGenerateContent.getMockImplementation();
+
+        // First two calls return excessively long audio (30 seconds for short text)
+        // Third call returns normal duration
+        mockGenerateContent.mockImplementation(async () => {
+          callCount++;
+          const durationMs = callCount <= 2 ? 30000 : 500; // 30s vs 0.5s
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(durationMs),
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const consoleErrorSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+
+        const response = await provider.generateAudio({
+          text: "Hello world, this is a test.", // Short text
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+          segmentId: "seg_test_001",
+        });
+
+        // Should succeed after retrying with different seeds
+        expect(response.success).toBe(true);
+        expect(callCount).toBe(3);
+
+        // Verify retry messages were printed for excessive duration
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("Duration"),
+        );
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("retrying with seed"),
+        );
+
+        consoleErrorSpy.mockRestore();
+        if (originalMockFn) {
+          mockGenerateContent.mockImplementation(originalMockFn);
+        }
+      });
+
+      it("should not retry when duration is within acceptable range", async () => {
+        let callCount = 0;
+
+        mockGenerateContent.mockImplementation(async () => {
+          callCount++;
+          // 3 seconds for ~30 char text is reasonable
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(3000),
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const response = await provider.generateAudio({
+          text: "Hello world, this is a test.",
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+        });
+
+        expect(response.success).toBe(true);
+        expect(callCount).toBe(1); // No retries needed
+
+        resetMockConfig();
+      });
+
+      it("should warn but succeed when duration remains excessive after all retries", async () => {
+        // All calls return excessively long audio
+        mockGenerateContent.mockImplementation(async () => {
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(60000), // 60 seconds
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const consoleErrorSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+
+        const response = await provider.generateAudio({
+          text: "Short text",
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+          segmentId: "seg_test_002",
+        });
+
+        // Should still succeed (with warning) after all retries exhausted
+        expect(response.success).toBe(true);
+
+        // Verify warning was printed about remaining excessive duration
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("after all retries"),
+        );
+
+        consoleErrorSpy.mockRestore();
+        resetMockConfig();
+      });
+
+      it("should allow up to 5 seconds for very short texts without retry", async () => {
+        let callCount = 0;
+
+        mockGenerateContent.mockImplementation(async () => {
+          callCount++;
+          // 5 seconds for very short text - at the limit, should not retry
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(5000), // Exactly 5 seconds (at limit)
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const response = await provider.generateAudio({
+          text: "Hi!", // Very short text (less than MIN_TEXT_LENGTH_FOR_VALIDATION)
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+        });
+
+        expect(response.success).toBe(true);
+        expect(callCount).toBe(1); // No retries since 5s is at the limit
+
+        resetMockConfig();
+      });
+
+      it("should strip style directives when calculating expected duration", async () => {
+        let callCount = 0;
+
+        mockGenerateContent.mockImplementation(async () => {
+          callCount++;
+          // Return reasonable duration for the actual content (without style tags)
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(2000), // 2 seconds
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const response = await provider.generateAudio({
+          // Style directive should be ignored when calculating expected duration
+          text: "<conflicted, breathless> Hello there.",
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+        });
+
+        expect(response.success).toBe(true);
+        expect(callCount).toBe(1); // Duration is reasonable for "Hello there."
+
+        resetMockConfig();
+      });
+
+      it("should retry when style-only text generates excessive audio", async () => {
+        let callCount = 0;
+        const originalMockFn = mockGenerateContent.getMockImplementation();
+
+        // First attempts return excessively long audio (29 seconds for style-only text)
+        // Final attempt returns short audio
+        mockGenerateContent.mockImplementation(async () => {
+          callCount++;
+          const durationMs = callCount <= 3 ? 29000 : 2000; // 29s vs 2s
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(durationMs),
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const consoleErrorSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+
+        const response = await provider.generateAudio({
+          // Style-only text with no actual content
+          text: "<breathing sounds>",
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+          segmentId: "seg_0012_test",
+        });
+
+        // Should succeed after retrying
+        expect(response.success).toBe(true);
+        expect(callCount).toBe(4); // 3 failed attempts + 1 success
+
+        // Verify retry messages mention the short/style-only text limit
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("short/style-only text"),
+        );
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("retrying with seed"),
+        );
+
+        consoleErrorSpy.mockRestore();
+        if (originalMockFn) {
+          mockGenerateContent.mockImplementation(originalMockFn);
+        }
+      });
+
+      it("should enforce 5 second limit for style-only text", async () => {
+        // Return 6 seconds of audio for style-only text - should trigger retry
+        mockGenerateContent.mockImplementation(async () => {
+          return {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: "audio/L16;rate=24000",
+                        data: createMockAudioData(6000), // 6 seconds
+                      },
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            promptFeedback: undefined,
+          };
+        });
+
+        const provider = new GeminiTTSProvider({
+          ...MINIMAL_CONFIG.provider,
+          maxRetries: 0,
+        });
+        await provider.initialize();
+
+        const consoleErrorSpy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => {});
+
+        const response = await provider.generateAudio({
+          text: "<whispered>", // Style-only, no content
+          voice: { ...VOICE_NARRATOR, seed: 100 },
+          outputPath: "/output/test.wav",
+          segmentId: "seg_style_only",
+        });
+
+        // Should still succeed but with warning after all retries
+        expect(response.success).toBe(true);
+
+        // Should have tried to retry due to 6s > 5s limit
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("5s limit"),
+        );
+
+        consoleErrorSpy.mockRestore();
+        resetMockConfig();
+      });
+
       it("should write valid WAV file", async () => {
         const provider = new GeminiTTSProvider(MINIMAL_CONFIG.provider);
         await provider.initialize();

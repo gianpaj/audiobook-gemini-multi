@@ -127,6 +127,120 @@ function convertToWav(rawData: string, mimeType: string): Buffer {
   return Buffer.concat([wavHeader, buffer]);
 }
 
+// ============================================================================
+// Duration Estimation and Validation
+// ============================================================================
+
+/**
+ * Average speaking rate in characters per second
+ * Based on typical English speech: ~150 words/min, ~5 chars/word = 750 chars/min = 12.5 chars/sec
+ * We use a conservative estimate to allow for slower speech styles
+ */
+const CHARS_PER_SECOND_MIN = 8; // Slowest reasonable speech
+const CHARS_PER_SECOND_MAX = 20; // Fast speech
+
+/**
+ * Maximum allowed duration multiplier over expected duration
+ * If actual duration exceeds expected * this multiplier, it's considered excessive
+ */
+const MAX_DURATION_MULTIPLIER = 3.0;
+
+/**
+ * Minimum text length to apply full duration validation
+ * Very short texts use a stricter absolute limit instead
+ */
+const MIN_TEXT_LENGTH_FOR_VALIDATION = 10;
+
+/**
+ * Maximum duration for style-only or very short text segments (5 seconds)
+ * Style directives like <breathing sounds> shouldn't generate much audio
+ */
+const MAX_DURATION_FOR_SHORT_TEXT_MS = 5000;
+
+/**
+ * Absolute maximum duration in ms for any single segment
+ * Acts as a safety cap (2 minutes)
+ */
+const ABSOLUTE_MAX_DURATION_MS = 120000;
+
+/**
+ * Estimate expected audio duration based on text length
+ * Returns min and max expected duration in milliseconds
+ */
+function estimateExpectedDuration(text: string): {
+  minMs: number;
+  maxMs: number;
+  expectedMs: number;
+} {
+  // Remove style directives like <conflicted, breathless> from character count
+  const cleanText = text.replace(/<[^>]+>/g, "").trim();
+  const charCount = cleanText.length;
+
+  // Calculate expected duration range
+  const minMs = (charCount / CHARS_PER_SECOND_MAX) * 1000;
+  const maxMs = (charCount / CHARS_PER_SECOND_MIN) * 1000;
+  const expectedMs = (minMs + maxMs) / 2;
+
+  return { minMs, maxMs, expectedMs };
+}
+
+/**
+ * Check if the generated audio duration is excessively long
+ * Returns true if duration should trigger a retry
+ */
+function isDurationExcessive(
+  actualDurationMs: number,
+  text: string,
+): { excessive: boolean; reason?: string; expected?: number } {
+  // Strip style directives like <breathing sounds> from text
+  const cleanText = text.replace(/<[^>]+>/g, "").trim();
+
+  // For very short or style-only texts, use a strict limit
+  // Style directives alone shouldn't generate significant audio
+  if (cleanText.length < MIN_TEXT_LENGTH_FOR_VALIDATION) {
+    // Check against strict limit for short/empty text
+    if (actualDurationMs > MAX_DURATION_FOR_SHORT_TEXT_MS) {
+      return {
+        excessive: true,
+        reason: `Duration ${Math.round(actualDurationMs / 1000)}s exceeds ${MAX_DURATION_FOR_SHORT_TEXT_MS / 1000}s limit for short/style-only text (${cleanText.length} chars)`,
+        expected: MAX_DURATION_FOR_SHORT_TEXT_MS,
+      };
+    }
+    // Also check absolute maximum
+    if (actualDurationMs > ABSOLUTE_MAX_DURATION_MS) {
+      return {
+        excessive: true,
+        reason: `Duration ${Math.round(actualDurationMs / 1000)}s exceeds absolute maximum of ${ABSOLUTE_MAX_DURATION_MS / 1000}s`,
+        expected: ABSOLUTE_MAX_DURATION_MS,
+      };
+    }
+    return { excessive: false };
+  }
+
+  const { maxMs, expectedMs } = estimateExpectedDuration(text);
+
+  // Check against absolute maximum
+  if (actualDurationMs > ABSOLUTE_MAX_DURATION_MS) {
+    return {
+      excessive: true,
+      reason: `Duration ${Math.round(actualDurationMs / 1000)}s exceeds absolute maximum of ${ABSOLUTE_MAX_DURATION_MS / 1000}s`,
+      expected: Math.round(expectedMs),
+    };
+  }
+
+  // Check if duration exceeds max expected by too much
+  const threshold = Math.max(maxMs * MAX_DURATION_MULTIPLIER, 10000); // At least 10 seconds tolerance
+  if (actualDurationMs > threshold) {
+    return {
+      excessive: true,
+      reason: `Duration ${Math.round(actualDurationMs / 1000)}s exceeds expected max of ${Math.round(threshold / 1000)}s (text: ${cleanText.length} chars)`,
+      expected: Math.round(expectedMs),
+    };
+  }
+
+  return { excessive: false };
+}
+
 /**
  * Estimate audio duration from WAV buffer
  */
@@ -449,6 +563,40 @@ export class GeminiTTSProvider implements TTSProvider {
         // Estimate duration
         const durationMs = estimateWavDuration(result);
 
+        // Validate duration - check for excessively long audio
+        const durationCheck = isDurationExcessive(durationMs, request.text);
+        if (durationCheck.excessive && seedAttempt < maxSeedRetries) {
+          currentSeed = baseSeed + seedAttempt + 1;
+          const segmentInfo = request.segmentId
+            ? ` [${request.segmentId}]`
+            : "";
+          console.error(
+            `\n⚠️  ${durationCheck.reason}${segmentInfo}, retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
+          );
+          await debugLog(
+            `\n=== DEBUG: Duration excessive, retrying with incremented seed ===\n` +
+              `Segment: ${request.segmentId || "unknown"}\n` +
+              `Text: "${request.text.substring(0, 100)}${request.text.length > 100 ? "..." : ""}"\n` +
+              `Actual duration: ${Math.round(durationMs / 1000)}s\n` +
+              `Expected duration: ~${durationCheck.expected}ms\n` +
+              `Original seed: ${baseSeed}\n` +
+              `New seed: ${currentSeed}\n` +
+              `Attempt: ${seedAttempt + 2}/${maxSeedRetries + 1}\n` +
+              `=== END DEBUG ===\n`,
+          );
+          continue; // Try again with the new seed
+        }
+
+        // If still excessive after all retries, log warning but return the result
+        if (durationCheck.excessive) {
+          const segmentInfo = request.segmentId
+            ? ` [${request.segmentId}]`
+            : "";
+          console.error(
+            `\n⚠️  Warning: ${durationCheck.reason}${segmentInfo} after all retries`,
+          );
+        }
+
         return {
           success: true,
           audioPath: request.outputPath,
@@ -660,6 +808,35 @@ export class GeminiTTSProvider implements TTSProvider {
 
         // Estimate duration
         const durationMs = estimateWavDuration(result);
+
+        // For multi-speaker, combine all segment texts for duration validation
+        const combinedText = request.segments.map((s) => s.text).join(" ");
+        const durationCheck = isDurationExcessive(durationMs, combinedText);
+        if (durationCheck.excessive && seedAttempt < maxSeedRetries) {
+          currentSeed = baseSeed + seedAttempt + 1;
+          console.error(
+            `\n⚠️  ${durationCheck.reason} (multi-speaker), retrying with seed ${currentSeed} (attempt ${seedAttempt + 2}/${maxSeedRetries + 1})`,
+          );
+          await debugLog(
+            `\n=== DEBUG: Duration excessive (multi-speaker), retrying with incremented seed ===\n` +
+              `Segments: ${request.segments.length}\n` +
+              `Combined text length: ${combinedText.length} chars\n` +
+              `Actual duration: ${Math.round(durationMs / 1000)}s\n` +
+              `Expected duration: ~${durationCheck.expected}ms\n` +
+              `Original seed: ${baseSeed}\n` +
+              `New seed: ${currentSeed}\n` +
+              `Attempt: ${seedAttempt + 2}/${maxSeedRetries + 1}\n` +
+              `=== END DEBUG ===\n`,
+          );
+          continue; // Try again with the new seed
+        }
+
+        // If still excessive after all retries, log warning but return the result
+        if (durationCheck.excessive) {
+          console.error(
+            `\n⚠️  Warning: ${durationCheck.reason} (multi-speaker) after all retries`,
+          );
+        }
 
         return {
           success: true,

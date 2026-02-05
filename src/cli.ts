@@ -179,18 +179,7 @@ function printInfo(message: string): void {
 /**
  * Generate audiobook from a story file
  */
-async function generateAudiobook(
-  storyPath: string,
-  config: Config,
-  outputDir: string,
-  options: {
-    force?: boolean;
-    verbose?: boolean;
-    dryRun?: boolean;
-    maxSegments?: number;
-    startFrom?: number;
-    speakers?: string[];
-    timestamp?: string;
+
     concurrency?: number;
   } = {},
 ): Promise<AudiobookResult> {
@@ -336,13 +325,46 @@ async function generateAudiobook(
     manifest = { ...manifest, storyHash: contentHash, configHash };
   }
 
-  const segmentsToGenerate = options.force
+  let segmentsToGenerate = options.force
     ? segmentsToProcess
     : getSegmentsToGenerate(manifest, segmentsToProcess, config);
 
-  const cachedSegmentsInfo = options.force
+  let cachedSegmentsInfo = options.force
     ? []
     : getCachedSegments(manifest, segmentsToProcess, config);
+
+  // Verify cached files actually exist - move any with missing files to generation queue
+  if (cachedSegmentsInfo.length > 0) {
+    const verifiedCached: typeof cachedSegmentsInfo = [];
+    const missingFiles: typeof cachedSegmentsInfo = [];
+
+    for (const info of cachedSegmentsInfo) {
+      const exists = await verifyCachedSegment(
+        outputDir,
+        info.cached,
+        folderHash,
+      );
+      if (exists) {
+        verifiedCached.push(info);
+      } else {
+        missingFiles.push(info);
+      }
+    }
+
+    if (missingFiles.length > 0) {
+      printWarning(
+        `Found ${missingFiles.length} cached segment(s) with missing audio files - will regenerate`,
+      );
+      // Add segments with missing files to the generation queue
+      segmentsToGenerate = [
+        ...segmentsToGenerate,
+        ...missingFiles.map((m) => m.segment),
+      ];
+      // Sort by index to maintain order
+      segmentsToGenerate.sort((a, b) => a.index - b.index);
+      cachedSegmentsInfo = verifiedCached;
+    }
+  }
 
   if (options.verbose) {
     printInfo(
@@ -522,25 +544,18 @@ async function generateAudiobook(
     }
   }
 
-  // Add cached segments to results
+  // Add cached segments to results (already verified earlier)
   for (const { segment, cached } of cachedSegmentsInfo) {
-    // Verify cached file still exists
-    const exists = await verifyCachedSegment(outputDir, cached, folderHash);
-    if (exists) {
-      segmentResults.push({
-        segment,
-        success: true,
-        audioPath: cached.audioPath,
-        durationMs: cached.durationMs,
-        fileSize: cached.fileSize,
-        fromCache: true,
-        timeTakenMs: 0,
-      });
-      totalAudioDurationMs += cached.durationMs;
-    } else {
-      // Cached file missing, would need to regenerate
-      printWarning(`Cached file missing for segment ${segment.id}`);
-    }
+    segmentResults.push({
+      segment,
+      success: true,
+      audioPath: cached.audioPath,
+      durationMs: cached.durationMs,
+      fileSize: cached.fileSize,
+      fromCache: true,
+      timeTakenMs: 0,
+    });
+    totalAudioDurationMs += cached.durationMs;
   }
 
   // Save final manifest
@@ -744,10 +759,7 @@ program
         storyFile,
         config,
         options.output || getDefaultOutputDir(),
-        {
-          force: options.force,
-          verbose: options.verbose,
-          dryRun: options.dryRun,
+
           timestamp,
           concurrency: options.concurrency,
         },
@@ -787,10 +799,7 @@ program
   .option("-f, --force", "Force regeneration", false)
   .option("-v, --verbose", "Verbose output", false)
   .option(
-    "-p, --concurrency <number>",
-    `Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
-    (val) => parseInt(val, 10),
-  )
+    "-p, --concurrency
   .action(async (storyFile: string, options: PreviewOptions) => {
     if (!(await fileExists(storyFile))) {
       exitWithError(`Story file not found: ${storyFile}`);

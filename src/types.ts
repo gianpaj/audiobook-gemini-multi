@@ -260,6 +260,8 @@ export interface AudiobookResult {
   success: boolean;
   /** Errors encountered */
   errors: string[];
+  /** Path to generated Audacity project (if --audacity used) */
+  audacityProjectPath?: string;
 }
 
 // ============================================================================
@@ -391,6 +393,8 @@ export interface GenerateOptions {
   dryRun?: boolean;
   /** Number of segments to generate in parallel (default: 4) */
   concurrency?: number;
+  /** Create Audacity project with individual segment tracks */
+  audacity?: boolean;
 }
 
 /**
