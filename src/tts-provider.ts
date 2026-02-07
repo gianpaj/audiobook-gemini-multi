@@ -448,8 +448,17 @@ export class GeminiTTSProvider implements TTSProvider {
 
             // Build the prompt with style instructions
             let textPrompt = request.text;
-            const stylePrompt = request.voice.stylePrompt;
+            let stylePrompt = request.voice.stylePrompt;
             if (stylePrompt) {
+              if (
+                textPrompt.length < 20 &&
+                textPrompt.includes("<") &&
+                textPrompt.endsWith(">")
+              ) {
+                const soundPrompt =
+                  "emotion_thought Only short moans, whimpers, gasps of overwhelming pleasure and surrender.emotion_intensity medium";
+                stylePrompt = soundPrompt;
+              }
               textPrompt = `${stylePrompt}: ${request.text}`;
             }
 
