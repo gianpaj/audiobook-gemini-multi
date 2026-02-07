@@ -467,7 +467,7 @@ export class GeminiTTSProvider implements TTSProvider {
                 `Seed: ${seed}\n` +
                 request.text.slice(0, 100) +
                 "\n" +
-                stylePrompt?.slice(0, 100) +
+                stylePrompt?.slice(0, 50) +
                 "\n=== END DEBUG ===\n",
             );
 

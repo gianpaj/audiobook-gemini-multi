@@ -179,7 +179,18 @@ function printInfo(message: string): void {
 /**
  * Generate audiobook from a story file
  */
-
+async function generateAudiobook(
+  storyPath: string,
+  config: Config,
+  outputDir: string,
+  options: {
+    force?: boolean;
+    verbose?: boolean;
+    dryRun?: boolean;
+    maxSegments?: number;
+    startFrom?: number;
+    speakers?: string[];
+    timestamp?: string;
     concurrency?: number;
   } = {},
 ): Promise<AudiobookResult> {
@@ -759,7 +770,10 @@ program
         storyFile,
         config,
         options.output || getDefaultOutputDir(),
-
+        {
+          force: options.force,
+          verbose: options.verbose,
+          dryRun: options.dryRun,
           timestamp,
           concurrency: options.concurrency,
         },
@@ -799,7 +813,10 @@ program
   .option("-f, --force", "Force regeneration", false)
   .option("-v, --verbose", "Verbose output", false)
   .option(
-    "-p, --concurrency
+    "-p, --concurrency <number>",
+    `Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
+    (val) => parseInt(val, 10),
+  )
   .action(async (storyFile: string, options: PreviewOptions) => {
     if (!(await fileExists(storyFile))) {
       exitWithError(`Story file not found: ${storyFile}`);
