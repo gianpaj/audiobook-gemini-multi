@@ -16,6 +16,7 @@ import {
   getSegmentsToGenerate,
   getCachedSegments,
   getSegmentsWithStyleChanges,
+  updateSegmentIdsWithStyle,
   getCacheStats,
   formatBytes,
   getCacheSummary,
@@ -705,6 +706,166 @@ describe("cache", () => {
       const narratorSegments = result.filter((s) => s.speaker === "NARRATOR");
       expect(narratorSegments).toHaveLength(1);
       expect(narratorSegments[0].speaker).toBe("NARRATOR");
+    });
+  });
+
+  describe("updateSegmentIdsWithStyle", () => {
+    const makeSegments = (): Segment[] => [
+      {
+        id: "seg_0000_original1",
+        index: 0,
+        speaker: "NARRATOR",
+        text: "Once upon a time...",
+        lineNumber: 1,
+      },
+      {
+        id: "seg_0001_original2",
+        index: 1,
+        speaker: "ALICE",
+        text: "Hello there!",
+        lineNumber: 2,
+      },
+    ];
+
+    it("should always update IDs since getVoiceConfig provides default stylePrompts", () => {
+      const segments = makeSegments();
+      const originalIds = segments.map((s) => s.id);
+
+      // MINIMAL_CONFIG has no explicit voices, but getVoiceConfig returns
+      // a default stylePrompt for every speaker (built-in defaults or fallback)
+      updateSegmentIdsWithStyle(segments, MINIMAL_CONFIG);
+
+      expect(segments[0].id).not.toBe(originalIds[0]);
+      expect(segments[1].id).not.toBe(originalIds[1]);
+      expect(segments[0].id).toMatch(/^seg_0000_[a-f0-9]{8}$/);
+      expect(segments[1].id).toMatch(/^seg_0001_[a-f0-9]{8}$/);
+    });
+
+    it("should change IDs when explicit stylePrompt is configured", () => {
+      const segments = makeSegments();
+      const originalIds = segments.map((s) => s.id);
+      const config = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR", stylePrompt: "Calm storytelling voice" }],
+      };
+
+      updateSegmentIdsWithStyle(segments, config);
+
+      // NARRATOR segment should have a new ID based on explicit stylePrompt
+      expect(segments[0].id).not.toBe(originalIds[0]);
+      expect(segments[0].id).toMatch(/^seg_0000_[a-f0-9]{8}$/);
+      // ALICE also gets a new ID (from default stylePrompt via getVoiceConfig fallback)
+      expect(segments[1].id).not.toBe(originalIds[1]);
+      expect(segments[1].id).toMatch(/^seg_0001_[a-f0-9]{8}$/);
+    });
+
+    it("should produce different IDs for explicit vs default stylePrompt", () => {
+      const segments1 = makeSegments();
+      const segments2 = makeSegments();
+      const configExplicit = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR", stylePrompt: "Calm storytelling voice" }],
+      };
+
+      updateSegmentIdsWithStyle(segments1, MINIMAL_CONFIG);
+      updateSegmentIdsWithStyle(segments2, configExplicit);
+
+      // NARRATOR gets different IDs because the resolved stylePrompt differs
+      expect(segments1[0].id).not.toBe(segments2[0].id);
+    });
+
+    it("should produce different IDs for different stylePrompts", () => {
+      const segments1 = makeSegments();
+      const segments2 = makeSegments();
+      const config1 = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR", stylePrompt: "Style A" }],
+      };
+      const config2 = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR", stylePrompt: "Style B" }],
+      };
+
+      updateSegmentIdsWithStyle(segments1, config1);
+      updateSegmentIdsWithStyle(segments2, config2);
+
+      expect(segments1[0].id).not.toBe(segments2[0].id);
+    });
+
+    it("should produce consistent IDs for the same stylePrompt", () => {
+      const segments1 = makeSegments();
+      const segments2 = makeSegments();
+      const config = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR", stylePrompt: "Calm storytelling voice" }],
+      };
+
+      updateSegmentIdsWithStyle(segments1, config);
+      updateSegmentIdsWithStyle(segments2, config);
+
+      expect(segments1[0].id).toBe(segments2[0].id);
+      expect(segments1[1].id).toBe(segments2[1].id);
+    });
+
+    it("should update IDs for all speakers with stylePrompts", () => {
+      const segments = makeSegments();
+      const originalIds = segments.map((s) => s.id);
+      const config = {
+        ...MINIMAL_CONFIG,
+        voices: [
+          { name: "NARRATOR", stylePrompt: "Calm voice" },
+          { name: "ALICE", stylePrompt: "Energetic voice" },
+        ],
+      };
+
+      updateSegmentIdsWithStyle(segments, config);
+
+      expect(segments[0].id).not.toBe(originalIds[0]);
+      expect(segments[1].id).not.toBe(originalIds[1]);
+      expect(segments[0].id).toMatch(/^seg_0000_[a-f0-9]{8}$/);
+      expect(segments[1].id).toMatch(/^seg_0001_[a-f0-9]{8}$/);
+    });
+
+    it("should preserve segment index in the ID prefix", () => {
+      const segments: Segment[] = [
+        {
+          id: "seg_0042_original",
+          index: 42,
+          speaker: "NARRATOR",
+          text: "Middle of story",
+          lineNumber: 100,
+        },
+      ];
+      const config = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR", stylePrompt: "Dramatic voice" }],
+      };
+
+      updateSegmentIdsWithStyle(segments, config);
+
+      expect(segments[0].id).toMatch(/^seg_0042_[a-f0-9]{8}$/);
+    });
+
+    it("should use case-insensitive speaker matching via getVoiceConfig", () => {
+      const segments: Segment[] = [
+        {
+          id: "seg_0000_original",
+          index: 0,
+          speaker: "narrator",
+          text: "Hello",
+          lineNumber: 1,
+        },
+      ];
+      const config = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR", stylePrompt: "Calm voice" }],
+      };
+
+      updateSegmentIdsWithStyle(segments, config);
+
+      // Should match despite case difference
+      expect(segments[0].id).not.toBe("seg_0000_original");
+      expect(segments[0].id).toMatch(/^seg_0000_[a-f0-9]{8}$/);
     });
   });
 

@@ -101,6 +101,7 @@ export {
   getCachedSegments,
   getSegmentsWithStyleChanges,
   cleanStaleCacheEntries,
+  updateSegmentIdsWithStyle,
   getCacheStats,
   clearCache,
   getCacheDirSize,
@@ -227,9 +228,8 @@ export async function quickGenerate(
 ): Promise<void> {
   const { stitchAudioFiles } = await import("./audio.js");
   const { ensureCacheDir, getCachedSegmentPath } = await import("./cache.js");
-  const { createTTSProvider, generateSegmentAudio } = await import(
-    "./tts-provider.js"
-  );
+  const { createTTSProvider, generateSegmentAudio } =
+    await import("./tts-provider.js");
   const { mkdir } = await import("fs/promises");
   const { join, basename, extname } = await import("path");
 

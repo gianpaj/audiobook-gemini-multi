@@ -81,6 +81,32 @@ export function generateSegmentHash(
 }
 
 /**
+ * Update segment IDs to incorporate the stylePrompt from config.
+ * This ensures cached file names change when a speaker's stylePrompt differs,
+ * so old audio files aren't overwritten and cache lookups use the right key.
+ *
+ * When no stylePrompt is configured, the ID stays unchanged (backward compatible).
+ */
+export function updateSegmentIdsWithStyle(
+  segments: Segment[],
+  config: Config,
+): void {
+  for (const segment of segments) {
+    const voiceConfig = getVoiceConfig(config, segment.speaker);
+    const stylePrompt = voiceConfig.stylePrompt || "";
+    if (stylePrompt) {
+      const hash = createHash("md5")
+        .update(
+          `${segment.index}-${segment.speaker}-${segment.text}-${stylePrompt}`,
+        )
+        .digest("hex")
+        .substring(0, 8);
+      segment.id = `seg_${segment.index.toString().padStart(4, "0")}_${hash}`;
+    }
+  }
+}
+
+/**
  * Get the cache directory path for a project
  * If storyHash is provided, creates a story-specific subfolder
  */

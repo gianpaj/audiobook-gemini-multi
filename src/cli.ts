@@ -76,6 +76,7 @@ import {
   getCacheDir,
   hashText,
   recoverCachedSegments,
+  updateSegmentIdsWithStyle,
 } from "./cache.js";
 
 import {
@@ -238,6 +239,10 @@ async function generateAudiobook(
       `Processing segments ${start + 1} to ${start + segmentsToProcess.length}`,
     );
   }
+
+  // Update segment IDs to incorporate stylePrompt from config
+  // This ensures file names change when stylePrompt differs
+  updateSegmentIdsWithStyle(segmentsToProcess, config);
 
   if (options.verbose) {
     console.log("\n" + getStorySummary(story) + "\n");
@@ -940,6 +945,10 @@ program
         });
         return;
       }
+
+      // Update segment IDs to incorporate stylePrompt from config
+      // so manifest lookups match the IDs used during generation
+      updateSegmentIdsWithStyle(story.segments, config);
 
       // Find segments with style changes
       const changedSegments = getSegmentsWithStyleChanges(
