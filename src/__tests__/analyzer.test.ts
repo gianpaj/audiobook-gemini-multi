@@ -122,7 +122,7 @@ describe("analyzer", () => {
       delete process.env.XAI_API_KEY;
 
       const result = await analyzeStory("Some text", {
-        model: "grok:grok-4-1-fast-reasoning",
+        model: "grok:grok-4-latest",
       });
 
       expect(result.success).toBe(false);
@@ -167,7 +167,7 @@ describe("analyzer", () => {
       expect(result.characters?.[2].gender).toBe("male");
       expect(result.usage?.inputTokens).toBe(100);
       expect(result.usage?.outputTokens).toBe(50);
-      expect(result.model).toBe("grok:grok-4-1-fast-reasoning");
+      expect(result.model).toBe("grok:grok-4-latest");
     });
 
     it("should use Grok when model is specified with grok prefix", async () => {
@@ -180,12 +180,12 @@ describe("analyzer", () => {
       });
 
       const result = await analyzeStory("Sample text", {
-        model: "grok:grok-4-1-fast-reasoning",
+        model: "grok:grok-4-latest",
       });
 
       expect(result.success).toBe(true);
       expect(result.characters?.[0].name).toBe("VILLAIN");
-      expect(result.model).toBe("grok:grok-4-1-fast-reasoning");
+      expect(result.model).toBe("grok:grok-4-latest");
     });
 
     it("should use Gemini when model is specified with gemini prefix", async () => {
@@ -213,11 +213,11 @@ describe("analyzer", () => {
 
       // Model starting with "grok" should use grok provider
       const result = await analyzeStory("Sample text", {
-        model: "grok-4-1-fast-reasoning",
+        model: "grok-4-latest",
       });
 
       expect(result.success).toBe(true);
-      expect(result.model).toBe("grok:grok-4-1-fast-reasoning");
+      expect(result.model).toBe("grok:grok-4-latest");
     });
 
     it("should handle JSON wrapped in markdown code blocks", async () => {
@@ -374,7 +374,7 @@ describe("analyzer", () => {
     it("should return default model for Grok", () => {
       const model = getDefaultModel("grok");
 
-      expect(model).toBe("grok-4-1-fast-reasoning");
+      expect(model).toBe("grok-4-latest");
     });
   });
 
@@ -402,13 +402,13 @@ describe("analyzer", () => {
     it("should return default model ID for Grok", () => {
       const modelId = getDefaultModelId("grok");
 
-      expect(modelId).toBe("grok:grok-4-1-fast-reasoning");
+      expect(modelId).toBe("grok:grok-4-latest");
     });
 
     it("should default to Gemini when no provider specified", () => {
       const modelId = getDefaultModelId();
 
-      expect(modelId).toBe("grok:grok-4-1-fast-reasoning");
+      expect(modelId).toBe("grok:grok-4-latest");
     });
   });
 

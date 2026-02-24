@@ -58,7 +58,7 @@ Output includes:
 
 Options:
 
-- `-m, --model <model>` - Model to use in `provider:model` format (e.g., `gemini:gemini-3-pro-preview`, `grok:grok-4-1-fast-reasoning`)
+- `-m, --model <model>` - Model to use in `provider:model` format (e.g., `gemini:gemini-3-pro-preview`, `grok:grok-4-latest`)
 - `--no-narrator` - Exclude NARRATOR from analysis
 - `--suggest-voices` - Suggest Gemini voices based on character genders
 - `--update-config [path]` - Update config file with suggested voices (default: `./config.json`)
@@ -69,17 +69,17 @@ Options:
 Examples:
 
 ```bash
-# Use default (grok:grok-4-1-fast-reasoning)
+# Use default (grok:grok-4-latest)
 pnpm run analyze story.txt
 
 # Use Grok (xAI) provider
-pnpm run analyze story.txt -m grok:grok-4-1-fast-reasoning
+pnpm run analyze story.txt -m grok:grok-4-latest
 
 # Use specific Gemini model
 pnpm run analyze story.txt -m gemini:gemini-3-pro-preview
 
 # Model names starting with provider name auto-detect provider
-pnpm run analyze story.txt -m grok-4-1-fast-reasoning
+pnpm run analyze story.txt -m grok-4-latest
 
 # Suggest voices based on character genders
 pnpm run analyze story.txt --suggest-voices
@@ -94,7 +94,7 @@ pnpm run analyze story.txt --update-config ./my-config.json
 Supported providers:
 
 - `gemini` - Google Gemini (default: `gemini-3-pro-preview`)
-- `grok` - xAI Grok (default: `grok-4-1-fast-reasoning`)
+- `grok` - xAI Grok (default: `grok-4-latest`)
 
 The output includes a ready-to-use speaker list for the convert command:
 

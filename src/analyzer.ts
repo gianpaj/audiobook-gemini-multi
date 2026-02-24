@@ -36,7 +36,7 @@ export interface Character {
 }
 
 export interface AnalysisOptions {
-  /** Model to use in format "provider:model" (e.g., "gemini:gemini-3-pro-preview" or "grok:grok-4-1-fast-reasoning") */
+  /** Model to use in format "provider:model" (e.g., "gemini:gemini-3.1-pro-preview" or "grok:grok-4-latest") */
   model?: string;
   /** Whether to include narrator in the analysis */
   includeNarrator?: boolean;
@@ -66,8 +66,8 @@ export interface AnalysisResult {
  * Default models for each provider
  */
 const DEFAULT_MODELS: Record<AnalysisProvider, string> = {
-  gemini: "gemini-3-pro-preview",
-  grok: "grok-4-1-fast-reasoning",
+  gemini: "gemini-3.1-pro-preview",
+  grok: "grok-4-latest",
 };
 
 /**

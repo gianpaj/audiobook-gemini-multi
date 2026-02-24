@@ -33,6 +33,8 @@ export interface ConversionResult {
   content?: string;
   /** Detected or used speakers */
   speakers?: string[];
+  /** The model that was used for conversion */
+  model?: string;
   /** Error message if conversion failed */
   error?: string;
   /** Token usage information */
@@ -130,7 +132,7 @@ export async function convertWithGemini(
     };
   }
 
-  const model = options.model || "gemini-3-pro-preview";
+  const model = options.model || "gemini-3.1-pro-preview";
   // const model = options.model || "gemini-3-flash-preview";
   const format = options.format || "bracket";
 
@@ -169,6 +171,7 @@ export async function convertWithGemini(
       success: true,
       content,
       speakers,
+      model,
       usage: {
         inputTokens: response.usageMetadata?.promptTokenCount || 0,
         outputTokens: response.usageMetadata?.candidatesTokenCount || 0,
@@ -399,11 +402,13 @@ export async function convertLargeDocument(
   }
 
   const content = results.join("\n");
+  const model = options.model || "gemini-3.1-pro-preview";
 
   return {
     success: true,
     content: postProcessContent(content, options.format || "bracket"),
     speakers: Array.from(allSpeakers).sort(),
+    model,
     usage: {
       inputTokens: totalInputTokens,
       outputTokens: totalOutputTokens,

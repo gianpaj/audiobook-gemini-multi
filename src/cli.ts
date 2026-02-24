@@ -1132,6 +1132,10 @@ program
     "-s, --speakers <names>",
     "Comma-separated list of speaker names to use",
   )
+  .option(
+    "-m, --model <model>",
+    "Model to use for conversion (default: gemini-3.1-pro-preview)",
+  )
   .option("--no-narrator", "Exclude NARRATOR tag (dialogue only)")
   .option("--prompt-only", "Show the conversion prompt without calling the API")
   .option("-v, --verbose", "Verbose output", false)
@@ -1158,6 +1162,7 @@ program
         format: options.format as "bracket" | "colon",
         speakers,
         includeNarrator: options.narrator !== false,
+        model: options.model,
       };
 
       // If prompt-only, just show the prompt
@@ -1216,7 +1221,7 @@ program
       console.log(chalk.cyan("\n=== Conversion Summary ===\n"));
       console.log(`  Input file:  ${inputFile}`);
       console.log(`  Output file: ${outputPath}`);
-      console.log(`  Model:       ${options.model}`);
+      console.log(`  Model:       ${result.model || "unknown"}`);
       console.log(`  Format:      ${options.format}`);
       console.log(`  Segments:    ${validation.lineCount}`);
       console.log(
@@ -1253,7 +1258,7 @@ program
   )
   .option(
     "-m, --model <model>",
-    "Model to use in provider:model format (e.g., gemini:gemini-3-pro-preview, grok:grok-4-1-fast-reasoning)",
+    "Model to use in provider:model format (e.g., gemini:gemini-3.1-pro-preview, grok:grok-4-latest)",
   )
   .option("--no-narrator", "Exclude NARRATOR from analysis")
   .option("--suggest-voices", "Suggest voices based on character genders")

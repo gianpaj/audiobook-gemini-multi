@@ -32,6 +32,9 @@ echo "GEMINI_API_KEY=your_api_key_here" > .env
 # 1. Initialize a new project with config based on your story
 pnpm run init examples/story.txt
 
+# 2. 
+pnpm run analyze story.txt
+
 # 2. Edit config.json to customize voices (optional)
 
 # 3. Generate the audiobook
