@@ -598,7 +598,7 @@ Use `--force` only when you explicitly want to regenerate everything.
 
 ```bash
 # Type check
-pnpm run typecheck
+pnpm run type-check
 
 # Build for production
 pnpm run build

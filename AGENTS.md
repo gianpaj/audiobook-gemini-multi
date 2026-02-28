@@ -39,7 +39,7 @@ audiobook-gemini-multi/
 - `pnpm run init <storyFile>` - Create config from story speakers
 - `pnpm run clean` - Clear cache and output files
 - `pnpm run test` - Run Vitest tests
-- `pnpm run typecheck` - Run TypeScript type checking
+- `pnpm run type-check` - Run TypeScript type checking
 
 ### Analyze Command
 
