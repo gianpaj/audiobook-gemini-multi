@@ -2,7 +2,12 @@
  * Test fixtures for configuration objects
  */
 
-import type { Config, VoiceConfig, ProviderConfig, AudioConfig } from "../types.js";
+import type {
+  Config,
+  VoiceConfig,
+  ProviderConfig,
+  AudioConfig,
+} from "../types.js";
 
 /**
  * Valid minimal configuration
@@ -241,6 +246,33 @@ export const CONFIG_JSON_STRING = JSON.stringify(MINIMAL_CONFIG, null, 2);
  * Invalid JSON string
  */
 export const INVALID_JSON_STRING = "{ invalid json }";
+
+/**
+ * Configuration with duplicate voiceName values (should be invalid)
+ */
+export const CONFIG_WITH_DUPLICATE_VOICES: Config = {
+  ...MINIMAL_CONFIG,
+  voices: [
+    {
+      name: "NARRATOR",
+      voiceName: "Zephyr",
+      stylePrompt: "Calm, measured storytelling voice",
+      speed: 1.0,
+    },
+    {
+      name: "ALICE",
+      voiceName: "Kore",
+      stylePrompt: "Young, energetic woman",
+      speed: 1.1,
+    },
+    {
+      name: "BOB",
+      voiceName: "Zephyr",
+      stylePrompt: "Deep, friendly male voice",
+      speed: 0.95,
+    },
+  ],
+};
 
 /**
  * Speakers list for testing createConfigForSpeakers

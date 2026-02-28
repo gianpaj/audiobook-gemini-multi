@@ -233,9 +233,15 @@ export function validateConfig(config: Config): ConfigValidationResult {
   }
 
   // Validate voice configs
+  const voiceNameMap = new Map<string, string[]>();
   for (const voice of config.voices || []) {
     if (!voice.name) {
       errors.push("Voice configuration missing name");
+    }
+    if (voice.voiceName) {
+      const existing = voiceNameMap.get(voice.voiceName) || [];
+      existing.push(voice.name || "(unnamed)");
+      voiceNameMap.set(voice.voiceName, existing);
     }
     if (
       voice.speed !== undefined &&
@@ -249,6 +255,15 @@ export function validateConfig(config: Config): ConfigValidationResult {
     ) {
       warnings.push(
         `Voice ${voice.name} has out-of-range pitch: ${voice.pitch}`,
+      );
+    }
+  }
+
+  // Check for duplicate voiceName values
+  for (const [voiceName, speakers] of voiceNameMap) {
+    if (speakers.length > 1) {
+      errors.push(
+        `Duplicate voiceName "${voiceName}" used by multiple speakers: ${speakers.join(", ")}`,
       );
     }
   }

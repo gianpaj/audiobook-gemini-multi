@@ -51,11 +51,21 @@ export const GEMINI_VOICES_DATA: VoiceInfo[] = [
   { name: "Leda", style: "Youthful", pitch: "Higher", gender: "Female" },
   { name: "Orus", style: "Firm", pitch: "Lower middle", gender: "Male" },
   { name: "Aoede", style: "Breezy", pitch: "Middle", gender: "Female" },
-  { name: "Callirrhoe", style: "Easy-going", pitch: "Middle", gender: "Female" },
+  {
+    name: "Callirrhoe",
+    style: "Easy-going",
+    pitch: "Middle",
+    gender: "Female",
+  },
   { name: "Autonoe", style: "Bright", pitch: "Middle", gender: "Female" },
   { name: "Enceladus", style: "Breathy", pitch: "Lower", gender: "Male" },
   { name: "Iapetus", style: "Clear", pitch: "Lower middle", gender: "Male" },
-  { name: "Umbriel", style: "Easy-going", pitch: "Lower middle", gender: "Male" },
+  {
+    name: "Umbriel",
+    style: "Easy-going",
+    pitch: "Lower middle",
+    gender: "Male",
+  },
   { name: "Algieba", style: "Smooth", pitch: "Lower", gender: "Male" },
   { name: "Despina", style: "Smooth", pitch: "Middle", gender: "Female" },
   { name: "Erinome", style: "Clear", pitch: "Middle", gender: "Female" },
@@ -68,10 +78,20 @@ export const GEMINI_VOICES_DATA: VoiceInfo[] = [
   { name: "Gacrux", style: "Mature", pitch: "Middle", gender: "Female" },
   { name: "Pulcherrima", style: "Forward", pitch: "Middle", gender: "Neutral" },
   { name: "Achird", style: "Friendly", pitch: "Middle", gender: "Neutral" },
-  { name: "Zubenelgenubi", style: "Casual", pitch: "Lower middle", gender: "Male" },
+  {
+    name: "Zubenelgenubi",
+    style: "Casual",
+    pitch: "Lower middle",
+    gender: "Male",
+  },
   { name: "Vindemiatrix", style: "Gentle", pitch: "Middle", gender: "Neutral" },
   { name: "Sadachbia", style: "Lively", pitch: "Lower", gender: "Male" },
-  { name: "Sadaltager", style: "Knowledgeable", pitch: "Middle", gender: "Male" },
+  {
+    name: "Sadaltager",
+    style: "Knowledgeable",
+    pitch: "Middle",
+    gender: "Male",
+  },
   { name: "Sulafat", style: "Warm", pitch: "Middle", gender: "Female" },
 ];
 
@@ -112,7 +132,7 @@ export function getNeutralVoices(): VoiceInfo[] {
  */
 export function getVoiceByName(name: string): VoiceInfo | undefined {
   return GEMINI_VOICES_DATA.find(
-    (v) => v.name.toLowerCase() === name.toLowerCase()
+    (v) => v.name.toLowerCase() === name.toLowerCase(),
   );
 }
 
@@ -175,7 +195,7 @@ function generateStylePrompt(character: Character, voice: VoiceInfo): string {
  */
 export function suggestVoiceForCharacter(
   character: Character,
-  usedVoices: Set<string> = new Set()
+  usedVoices: Set<string> = new Set(),
 ): VoiceSuggestion {
   const voiceGender = mapGenderToVoiceGender(character.gender);
   let candidates = getVoicesByGender(voiceGender);
@@ -187,7 +207,7 @@ export function suggestVoiceForCharacter(
         v.style === "Informative" ||
         v.style === "Clear" ||
         v.style === "Even" ||
-        v.name === "Zephyr" // Classic narrator voice
+        v.name === "Zephyr", // Classic narrator voice
     );
     if (narratorVoices.length > 0) {
       candidates = narratorVoices;
@@ -215,7 +235,7 @@ export function suggestVoiceForCharacter(
  * Ensures no duplicate voices are assigned
  */
 export function suggestVoicesForAnalysis(
-  result: AnalysisResult
+  result: AnalysisResult,
 ): VoiceSuggestion[] {
   if (!result.success || !result.characters) {
     return [];
@@ -247,7 +267,7 @@ export function suggestVoicesForAnalysis(
           v.style === "Informative" ||
           v.style === "Clear" ||
           v.style === "Even" ||
-          v.name === "Zephyr"
+          v.name === "Zephyr",
       );
       if (narratorPreferred.length > 0) {
         candidates = narratorPreferred;
@@ -263,11 +283,10 @@ export function suggestVoicesForAnalysis(
       candidates = GEMINI_VOICES_DATA.filter((v) => !usedVoices.has(v.name));
     }
     if (candidates.length === 0) {
-      // Last resort: reuse voices
-      candidates = getVoicesByGender(voiceGender);
-      if (candidates.length === 0) {
-        candidates = GEMINI_VOICES_DATA;
-      }
+      // No unique voices left — error out instead of silently reusing
+      throw new Error(
+        `Cannot assign a unique voice to "${character.name}": all ${GEMINI_VOICES_DATA.length} available voices have already been assigned to other characters`,
+      );
     }
 
     const voice = candidates[0];
@@ -284,7 +303,7 @@ export function suggestVoicesForAnalysis(
     // Remove from available pools
     for (const gender of Object.keys(availableByGender) as VoiceGender[]) {
       availableByGender[gender] = availableByGender[gender].filter(
-        (v) => v.name !== voice.name
+        (v) => v.name !== voice.name,
       );
     }
   }
@@ -346,7 +365,7 @@ export function formatVoiceSuggestions(suggestions: VoiceSuggestion[]): string {
  * Convert voice suggestions to VoiceConfig array for config.json
  */
 export function suggestionsToVoiceConfigs(
-  suggestions: VoiceSuggestion[]
+  suggestions: VoiceSuggestion[],
 ): Array<{
   name: string;
   voiceName: string;
@@ -365,7 +384,7 @@ export function suggestionsToVoiceConfigs(
  * Format voice suggestions as JSON config snippet
  */
 export function formatVoiceSuggestionsAsConfig(
-  suggestions: VoiceSuggestion[]
+  suggestions: VoiceSuggestion[],
 ): string {
   const configs = suggestionsToVoiceConfigs(suggestions);
   return JSON.stringify(configs, null, 2);

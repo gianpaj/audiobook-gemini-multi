@@ -291,7 +291,7 @@ describe("voices", () => {
       expect(narratorSuggestion).toBeDefined();
     });
 
-    it("should handle many characters of same gender", () => {
+    it("should handle many characters of same gender by borrowing from other pools", () => {
       const result: AnalysisResult = {
         success: true,
         characters: Array.from({ length: 15 }, (_, i) => ({
@@ -302,7 +302,39 @@ describe("voices", () => {
       };
       const suggestions = suggestVoicesForAnalysis(result);
       expect(suggestions).toHaveLength(15);
-      // Should still work even with more characters than voices of that gender
+      // All voice names must be unique — no duplicates allowed
+      const voiceNames = suggestions.map((s) => s.voice.name);
+      expect(new Set(voiceNames).size).toBe(15);
+    });
+
+    it("should throw when more characters than available voices", () => {
+      const result: AnalysisResult = {
+        success: true,
+        characters: Array.from({ length: 31 }, (_, i) => ({
+          name: `CHAR${i}`,
+          gender: "female" as const,
+          confidence: "high" as const,
+        })),
+      };
+      expect(() => suggestVoicesForAnalysis(result)).toThrow(
+        /Cannot assign a unique voice/,
+      );
+    });
+
+    it("should never produce duplicate voiceNames", () => {
+      // Use the maximum number of characters that can be uniquely assigned (30 voices total)
+      const result: AnalysisResult = {
+        success: true,
+        characters: Array.from({ length: 30 }, (_, i) => ({
+          name: `CHAR${i}`,
+          gender: (["female", "male", "neutral"] as const)[i % 3],
+          confidence: "high" as const,
+        })),
+      };
+      const suggestions = suggestVoicesForAnalysis(result);
+      expect(suggestions).toHaveLength(30);
+      const voiceNames = suggestions.map((s) => s.voice.name);
+      expect(new Set(voiceNames).size).toBe(30);
     });
   });
 
@@ -472,7 +504,7 @@ describe("voices", () => {
       const suggestions = suggestVoicesForAnalysis(result);
       expect(suggestions).toHaveLength(4);
 
-      // All voices should be unique
+      // All voices must be unique — duplicates are never allowed
       const voiceNames = suggestions.map((s) => s.voice.name);
       expect(new Set(voiceNames).size).toBe(4);
 

@@ -449,13 +449,13 @@ async function generateAudiobook(
 
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
 
-  console.log("\n" + chalk.cyan("Segment summary:"));
+  console.log(`\n${chalk.cyan("Segment summary:")}`);
   console.log(
     `  Total: ${totalSegments} | Cached: ${chalk.green(cachedCount)} | To generate: ${chalk.yellow(toGenerateCount)} | Concurrency: ${chalk.cyan(concurrency)}`,
   );
 
   if (segmentsToGenerate.length > 0) {
-    console.log("\n" + chalk.cyan("Generating audio segments..."));
+    console.log(`\n${chalk.cyan("Generating audio segments...")}`);
 
     // Track completed count for periodic manifest saves
     let completedSinceLastSave = 0;
@@ -1158,6 +1158,24 @@ program
         ? options.speakers.split(",").map((s: string) => s.trim().toUpperCase())
         : undefined;
 
+      // Validate no duplicate speaker names
+      if (speakers) {
+        const seen = new Set<string>();
+        const duplicates: string[] = [];
+        for (const s of speakers) {
+          if (seen.has(s)) {
+            duplicates.push(s);
+          }
+          seen.add(s);
+        }
+        if (duplicates.length > 0) {
+          spinner.fail(
+            `Duplicate speaker name(s) in -s flag: ${[...new Set(duplicates)].join(", ")}`,
+          );
+          process.exit(1);
+        }
+      }
+
       const conversionOptions: ConversionOptions = {
         format: options.format as "bracket" | "colon",
         speakers,
@@ -1381,6 +1399,31 @@ program
 
           // Update voices with suggestions
           const newVoices = suggestionsToVoiceConfigs(voiceSuggestions);
+
+          // Validate no duplicate voiceNames before writing
+          const voiceNameCounts = new Map<string, string[]>();
+          for (const v of newVoices) {
+            if (v.voiceName) {
+              const existing = voiceNameCounts.get(v.voiceName) || [];
+              existing.push(v.name);
+              voiceNameCounts.set(v.voiceName, existing);
+            }
+          }
+          const duplicateVoices = [...voiceNameCounts.entries()].filter(
+            ([, speakers]) => speakers.length > 1,
+          );
+          if (duplicateVoices.length > 0) {
+            const details = duplicateVoices
+              .map(
+                ([voice, speakers]) =>
+                  `"${voice}" used by: ${speakers.join(", ")}`,
+              )
+              .join("; ");
+            throw new Error(
+              `Cannot write config with duplicate voiceName values: ${details}`,
+            );
+          }
+
           config.voices = newVoices;
 
           // Save config

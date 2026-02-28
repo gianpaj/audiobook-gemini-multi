@@ -22,6 +22,7 @@ import {
   FULL_CONFIG,
   INVALID_CONFIG_BAD_FORMAT,
   CONFIG_WITH_WARNINGS,
+  CONFIG_WITH_DUPLICATE_VOICES,
   VOICE_NARRATOR,
   VOICE_ALICE,
   TEST_SPEAKERS,
@@ -208,6 +209,38 @@ describe("config", () => {
       const result = validateConfig(config as any);
 
       expect(result.errors).toContain("Voice configuration missing name");
+    });
+
+    it("should error on duplicate voiceName across speakers", () => {
+      const result = validateConfig(CONFIG_WITH_DUPLICATE_VOICES);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => e.includes('Duplicate voiceName "Zephyr"')),
+      ).toBe(true);
+      expect(
+        result.errors.some((e) => e.includes("NARRATOR") && e.includes("BOB")),
+      ).toBe(true);
+    });
+
+    it("should allow unique voiceNames across speakers", () => {
+      const result = validateConfig(FULL_CONFIG);
+
+      expect(result.errors.some((e) => e.includes("Duplicate voiceName"))).toBe(
+        false,
+      );
+    });
+
+    it("should not error when voices have no voiceName set", () => {
+      const config = {
+        ...MINIMAL_CONFIG,
+        voices: [{ name: "NARRATOR" }, { name: "ALICE" }],
+      };
+      const result = validateConfig(config);
+
+      expect(result.errors.some((e) => e.includes("Duplicate voiceName"))).toBe(
+        false,
+      );
     });
   });
 

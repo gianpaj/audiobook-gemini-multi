@@ -77,7 +77,7 @@ Analyze a story text file to identify characters and their likely gender using A
 ```bash
 pnpm run analyze story.txt
 # Options:
-#   -m, --model <model>      Model to use in provider:model format (default: gemini:gemini-2.5-flash)
+#   -m, --model <model>      Model to use in provider:model format (default: gemini:gemini-3-preview-flash)
 #   --no-narrator            Exclude NARRATOR from analysis
 #   --suggest-voices         Suggest voices based on character genders
 #   --update-config [path]   Update config file with suggested voices (default: ./config.json)
@@ -97,23 +97,23 @@ This command uses AI to analyze your text and identify:
 
 | Provider | Default Model | API Key Variable |
 | -------- | ------------- | ---------------- |
-| `gemini` | `gemini-2.5-flash` | `GEMINI_API_KEY` |
-| `grok` | `grok-3-fast` | `XAI_API_KEY` |
+| `gemini` | `gemini-3-preview-flash` | `GEMINI_API_KEY` |
+| `grok` | `grok-4` | `XAI_API_KEY` |
 
 **Examples:**
 
 ```bash
-# Use default (gemini:gemini-2.5-flash)
+# Use default (gemini:gemini-3-preview-flash)
 pnpm run analyze story.txt
 
 # Use Grok (xAI) provider
-pnpm run analyze story.txt -m grok:grok-3-fast
+pnpm run analyze story.txt -m grok:grok-4
 
 # Use specific Gemini model
-pnpm run analyze story.txt -m gemini:gemini-2.5-pro
+pnpm run analyze story.txt -m gemini:gemini-3-pro
 
 # Model names starting with provider name auto-detect provider
-pnpm run analyze story.txt -m grok-3-fast
+pnpm run analyze story.txt -m grok-4
 
 # Output as JSON for scripting
 pnpm run analyze story.txt --json
