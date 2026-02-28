@@ -452,8 +452,8 @@ export class GeminiTTSProvider implements TTSProvider {
             if (stylePrompt) {
               if (
                 textPrompt.length < 20 &&
-                textPrompt.includes("<") &&
-                textPrompt.endsWith(">")
+                ((textPrompt.includes("<") && textPrompt.endsWith(">")) ||
+                  textPrompt.length < 7)
               ) {
                 const soundPrompt =
                   "emotion_thought Only short moans, whimpers, gasps of overwhelming pleasure and surrender.emotion_intensity medium";
