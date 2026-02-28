@@ -81,10 +81,14 @@ NARRATOR: A friendly voice answered back.`
       : `[NARRATOR] Once upon a time, there was a young girl named Alice.
 [ALICE] Hello! Is anyone there?
 [NARRATOR] She called out into the darkness.
+[ALICE] <breathless high laugh — running out of air> oh, you crack me up!
 [BOB] I'm here! Don't worry.
 [NARRATOR] A friendly voice answered back.`;
 
   let prompt = `Convert the following text into speaker-tagged format for audiobook generation.
+
+Do not write single phrases without words: e.g. [SANYA] <tiny soft high sound, short>
+Remember this is a Text to Speech model. It cannot make background sounds neither.
 
 Output Format: ${options.format === "colon" ? "SPEAKER: dialogue" : "[SPEAKER] dialogue"}
 
