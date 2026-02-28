@@ -328,7 +328,7 @@ export function splitIntoChunks(
 
   for (const paragraph of paragraphs) {
     const newChunk = currentChunk
-      ? currentChunk + "\n\n" + paragraph
+      ? `${currentChunk}\n\n${paragraph}`
       : paragraph;
     const newTokens = estimateTokenCount(newChunk);
 

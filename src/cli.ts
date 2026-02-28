@@ -8,111 +8,101 @@
  * - clean: Clear cache and regenerated files
  */
 
-import { Command } from "commander";
-import ora from "ora";
 import chalk from "chalk";
-
+import { Command } from "commander";
 import {
-  readFile,
-  writeFile as writeFileFs,
   access,
   mkdir,
-  unlink,
   readdir,
+  readFile,
+  unlink,
+  writeFile as writeFileFs,
 } from "fs/promises";
-import { join, basename, extname } from "path";
-
-import type {
-  Config,
-  ParsedStory,
-  Segment,
-  SegmentGenerationResult,
-  AudiobookResult,
-  GenerateOptions,
-  PreviewOptions,
-} from "./types.js";
-
-import { DEFAULT_CONCURRENCY } from "./types.js";
-
+import ora from "ora";
+import { basename, extname, join } from "path";
 import {
-  parseFile,
-  validateParsedStory,
-  getStorySummary,
-  getSegmentRange,
-  filterBySpeaker,
-} from "./parser.js";
-
+  type AnalysisOptions,
+  analyzeStory,
+  formatAnalysisResult,
+  getAnalysisPrompt,
+  getDefaultModelId,
+  getSpeakerListForConvert,
+} from "./analyzer.js";
 import {
-  loadConfig,
-  loadOrCreateConfig,
-  saveConfig,
-  createConfigForSpeakers,
-  getConfigSummary,
-  hashConfig,
-  DEFAULT_CONFIG,
-} from "./config.js";
-
+  type AudioFileInfo,
+  estimateAudioDuration,
+  estimateCost,
+  formatFileSize,
+  getStitchSummary,
+  saveManifest,
+  stitchAudioFiles,
+} from "./audio.js";
 import {
-  suggestVoicesForAnalysis,
-  formatVoiceSuggestions,
-  suggestionsToVoiceConfigs,
-  GEMINI_VOICES_DATA,
-} from "./voices.js";
-
-import {
-  loadCacheManifest,
-  saveCacheManifest,
-  createEmptyManifest,
-  verifyCachedSegment,
-  updateCachedSegment,
-  getSegmentsToGenerate,
-  getCachedSegments,
-  getSegmentsWithStyleChanges,
   clearCache,
-  getCachedSegmentPath,
-  getCacheSummary,
-  getCacheStats,
+  createEmptyManifest,
   ensureCacheDir,
   getCacheDir,
+  getCachedSegmentPath,
+  getCachedSegments,
+  getCacheStats,
+  getCacheSummary,
+  getSegmentsToGenerate,
+  getSegmentsWithStyleChanges,
   hashText,
+  loadCacheManifest,
   recoverCachedSegments,
+  saveCacheManifest,
+  updateCachedSegment,
   updateSegmentIdsWithStyle,
+  verifyCachedSegment,
 } from "./cache.js";
 
 import {
-  createTTSProvider,
-  generateSegmentAudio,
-  formatDuration,
-  type TTSProvider,
-} from "./tts-provider.js";
-
-import { setDebugLogCacheDir, processWithConcurrency } from "./utils.js";
-
+  createConfigForSpeakers,
+  DEFAULT_CONFIG,
+  getConfigSummary,
+  hashConfig,
+  loadConfig,
+  loadOrCreateConfig,
+  saveConfig,
+} from "./config.js";
 import {
-  analyzeStory,
-  formatAnalysisResult,
-  getSpeakerListForConvert,
-  getAnalysisPrompt,
-  getDefaultModelId,
-  type AnalysisOptions,
-} from "./analyzer.js";
-
-import {
+  type ConversionOptions,
   convertToStoryFormat,
   getConversionPrompt,
   validateConvertedContent,
-  type ConversionOptions,
 } from "./converter.js";
+import {
+  filterBySpeaker,
+  getSegmentRange,
+  getStorySummary,
+  parseFile,
+  validateParsedStory,
+} from "./parser.js";
 
 import {
-  stitchAudioFiles,
-  saveManifest,
-  getStitchSummary,
-  formatFileSize,
-  estimateCost,
-  estimateAudioDuration,
-  type AudioFileInfo,
-} from "./audio.js";
+  createTTSProvider,
+  formatDuration,
+  generateSegmentAudio,
+  type TTSProvider,
+} from "./tts-provider.js";
+import type {
+  AudiobookResult,
+  Config,
+  GenerateOptions,
+  ParsedStory,
+  PreviewOptions,
+  Segment,
+  SegmentGenerationResult,
+} from "./types.js";
+import { DEFAULT_CONCURRENCY } from "./types.js";
+import { processWithConcurrency, setDebugLogCacheDir } from "./utils.js";
+import {
+  formatVoiceSuggestions,
+  GEMINI_VOICES_DATA,
+  suggestionsToVoiceConfigs,
+  suggestVoicesForAnalysis,
+} from "./voices.js";
 
 // ============================================================================
 // CLI Utilities
@@ -245,7 +235,7 @@ async function generateAudiobook(
   updateSegmentIdsWithStyle(segmentsToProcess, config);
 
   if (options.verbose) {
-    console.log("\n" + getStorySummary(story) + "\n");
+    console.log(`\n${getStorySummary(story)}\n`);
   }
 
   // Ensure output directory exists
@@ -397,7 +387,7 @@ async function generateAudiobook(
 
   // Dry run - just show what would be done
   if (options.dryRun) {
-    console.log("\n" + chalk.cyan("=== Dry Run ==="));
+    console.log(`\n${chalk.cyan("=== Dry Run ===")}`);
     console.log(`Would generate ${segmentsToGenerate.length} segments`);
     console.log(`Would use ${cachedSegmentsInfo.length} cached segments`);
     console.log(
