@@ -742,14 +742,13 @@ program
     }
 
     // Load config
+    const configPath = options.config || getDefaultConfigPath();
     let config: Config;
     try {
-      config = await loadOrCreateConfig(
-        options.config || getDefaultConfigPath(),
-      );
+      config = await loadOrCreateConfig(configPath);
     } catch (error) {
       exitWithError(
-        `Failed to load config: ${error instanceof Error ? error.message : error}`,
+        `Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
       );
     }
 
@@ -817,14 +816,13 @@ program
       exitWithError(`Story file not found: ${storyFile}`);
     }
 
+    const configPath = options.config || getDefaultConfigPath();
     let config: Config;
     try {
-      config = await loadOrCreateConfig(
-        options.config || getDefaultConfigPath(),
-      );
+      config = await loadOrCreateConfig(configPath);
     } catch (error) {
       exitWithError(
-        `Failed to load config: ${error instanceof Error ? error.message : error}`,
+        `Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
       );
     }
 
@@ -899,12 +897,13 @@ program
         exitWithError(`Story file not found: ${storyFile}`);
       }
 
+      const configPath = options.config || getDefaultConfigPath();
       let config: Config;
       try {
-        config = await loadConfig(options.config || getDefaultConfigPath());
+        config = await loadConfig(configPath);
       } catch (error) {
         exitWithError(
-          `Failed to load config: ${error instanceof Error ? error.message : error}`,
+          `Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
         );
       }
 
@@ -1050,7 +1049,9 @@ program
         const config = await loadConfig(options.config);
         console.log(getConfigSummary(config));
       } catch (error) {
-        console.log(chalk.red(`Failed to load config: ${error}`));
+        console.log(
+          chalk.red(`Failed to load config (${options.config}): ${error}`),
+        );
       }
     } else {
       console.log("No config file found. Run 'setup' or 'init' to create one.");
