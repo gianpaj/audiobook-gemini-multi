@@ -58,7 +58,7 @@ Output includes:
 
 Options:
 
-- `-m, --model <model>` - Model to use in `provider:model` format (e.g., `gemini:gemini-3-pro-preview`, `grok:grok-4-latest`)
+- `-m, --model <model>` - Model to use in `provider:model` format (e.g., `gemini:gemini-3.1-pro-preview`, `grok:grok-4-latest`)
 - `--no-narrator` - Exclude NARRATOR from analysis
 - `--suggest-voices` - Suggest Gemini voices based on character genders
 - `--update-config [path]` - Update config file with suggested voices (default: `./config.json`)
@@ -93,7 +93,7 @@ pnpm run analyze story.txt --update-config ./my-config.json
 
 Supported providers:
 
-- `gemini` - Google Gemini (default: `gemini-3-pro-preview`)
+- `gemini` - Google Gemini (default: `gemini-3.1-pro-preview`)
 - `grok` - xAI Grok (default: `grok-4-latest`)
 
 The output includes a ready-to-use speaker list for the convert command:

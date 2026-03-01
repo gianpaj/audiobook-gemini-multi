@@ -8,8 +8,6 @@
  * - clean: Clear cache and regenerated files
  */
 
-import chalk from "chalk";
-import { Command } from "commander";
 import {
   access,
   mkdir,
@@ -17,9 +15,11 @@ import {
   readFile,
   unlink,
   writeFile as writeFileFs,
-} from "fs/promises";
+} from "node:fs/promises";
+import { basename, extname, join } from "node:path";
+import chalk from "chalk";
+import { Command } from "commander";
 import ora from "ora";
-import { basename, extname, join } from "path";
 import {
   type AnalysisOptions,
   analyzeStory,
@@ -430,6 +430,7 @@ async function generateAudiobook(
 
   // Generate segments with progress bar
   const segmentResults: SegmentGenerationResult[] = [];
+  // biome-ignore lint/correctness/noUnusedVariables: Used for tracking progress
   let totalAudioDurationMs = 0;
 
   // Log segment generation summary
@@ -489,6 +490,7 @@ async function generateAudiobook(
 
             // Update cache manifest (will be saved periodically)
             manifest = updateCachedSegment(manifest, segment, config, {
+              // biome-ignore lint/style/noNonNullAssertion: audioPath is guaranteed when response succeeds
               audioPath: response.audioPath!,
               durationMs: response.durationMs || 0,
               fileSize: response.fileSize || 0,
@@ -585,6 +587,7 @@ async function generateAudiobook(
   const outputPath = join(outputDir, outputFileName);
 
   const audioFiles: AudioFileInfo[] = successfulResults.map((r) => ({
+    // biome-ignore lint/style/noNonNullAssertion: audioPath is guaranteed for successful results
     path: r.audioPath!,
     index: r.segment.index,
     speaker: r.segment.speaker,
@@ -611,7 +614,7 @@ async function generateAudiobook(
     spinner.succeed("Audio files stitched successfully");
 
     // Print summary
-    console.log("\n" + getStitchSummary(stitchResult));
+    console.log(`\n${getStitchSummary(stitchResult)}`);
 
     const totalTimeMs = Date.now() - startTime;
 
@@ -753,7 +756,7 @@ program
     }
 
     if (options.verbose) {
-      console.log("\n" + getConfigSummary(config) + "\n");
+      console.log(`\n${getConfigSummary(config)}\n`);
     }
 
     // Generate timestamp for unique output filenames
@@ -774,7 +777,7 @@ program
       );
 
       if (!options.dryRun) {
-        console.log("\n" + chalk.green("✔ Audiobook generation complete!"));
+        console.log(`\n${chalk.green("✔ Audiobook generation complete!")}`);
         console.log(
           `\nTotal time: ${formatDuration(result.stats.totalTimeMs)}`,
         );
@@ -1201,6 +1204,7 @@ program
 
       // Validate the result
       const validation = validateConvertedContent(
+        // biome-ignore lint/style/noNonNullAssertion: result.content is guaranteed when success is true
         result.content!,
         options.format,
       );
@@ -1223,7 +1227,8 @@ program
         options.output || inputFile.replace(/\.[^.]+$/, "_converted.txt");
 
       // Write output file
-      const { writeFile: writeFileFs } = await import("fs/promises");
+      const { writeFile: writeFileFs } = await import("node:fs/promises");
+      // biome-ignore lint/style/noNonNullAssertion: result.content is guaranteed to exist when success is true
       await writeFileFs(outputPath, result.content!, "utf-8");
 
       // Show summary

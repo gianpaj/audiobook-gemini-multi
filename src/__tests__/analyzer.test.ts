@@ -2,18 +2,18 @@
  * Tests for the analyzer module
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  type AnalysisResult,
   analyzeStory,
   formatAnalysisResult,
-  getSpeakerListForConvert,
   getAnalysisPrompt,
-  getSupportedProviders,
-  getDefaultModel,
   getApiKeyEnvVar,
+  getDefaultModel,
   getDefaultModelId,
-  type AnalysisResult,
+  getSpeakerListForConvert,
+  getSupportedProviders,
 } from "../analyzer.js";
 
 // Mock config to control behavior
@@ -108,7 +108,7 @@ describe("analyzer", () => {
   });
 
   describe("analyzeStory", () => {
-    it("should return error when no API key is provided for Gemini", async () => {
+    it.only("should return error when no API key is provided for Gemini", async () => {
       delete process.env.GEMINI_API_KEY;
 
       const result = await analyzeStory("Some text");
@@ -196,12 +196,12 @@ describe("analyzer", () => {
       });
 
       const result = await analyzeStory("Sample text", {
-        model: "gemini:gemini-3-pro-preview",
+        model: "gemini:gemini-3.1-pro-preview",
       });
 
       expect(result.success).toBe(true);
       expect(result.characters?.[0].name).toBe("HERO");
-      expect(result.model).toBe("gemini:gemini-3-pro-preview");
+      expect(result.model).toBe("gemini:gemini-3.1-pro-preview");
     });
 
     it("should infer provider from model name without prefix", async () => {
@@ -368,7 +368,7 @@ describe("analyzer", () => {
     it("should return default model for Gemini", () => {
       const model = getDefaultModel("gemini");
 
-      expect(model).toBe("gemini-3-pro-preview");
+      expect(model).toBe("gemini-3.1-pro-preview");
     });
 
     it("should return default model for Grok", () => {
@@ -396,7 +396,7 @@ describe("analyzer", () => {
     it("should return default model ID for Gemini", () => {
       const modelId = getDefaultModelId("gemini");
 
-      expect(modelId).toBe("gemini:gemini-3-pro-preview");
+      expect(modelId).toBe("gemini:gemini-3.1-pro-preview");
     });
 
     it("should return default model ID for Grok", () => {

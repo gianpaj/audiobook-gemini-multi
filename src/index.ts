@@ -7,204 +7,196 @@
  * @module audiobook-generator
  */
 
-// Export all types
-export type {
-  // Parser types
-  Segment,
-  ParsedStory,
-  // Config types
-  VoiceConfig,
-  ProviderConfig,
-  AudioConfig,
-  Config,
-  // Cache types
-  SegmentHash,
-  CachedSegment,
-  CacheManifest,
-  // Generation types
-  GenerationStats,
-  GenerationProgress,
-  SegmentGenerationResult,
-  AudiobookResult,
-  // Manifest types
-  ManifestSegment,
-  AudiobookManifest,
-  // TTS types
-  TTSRequest,
-  TTSResponse,
-  MultiSpeakerTTSRequest,
-  // CLI types
-  GenerateOptions,
-  PreviewOptions,
-  UpdateStylesOptions,
-  CleanOptions,
-  // Event types
-  GenerationEvent,
-  GenerationEventHandler,
-} from "./types.js";
-
-// Export parser functions
-export {
-  parseFile,
-  parseContent,
-  detectFormat,
-  validateParsedStory,
-  getStorySummary,
-  extractSpeakers,
-  convertFormat,
-  filterBySpeaker,
-  getSegmentRange,
-  type ParserOptions,
-  type ValidationResult,
-} from "./parser.js";
-
-// Export config functions
-export {
-  loadConfig,
-  loadOrCreateConfig,
-  saveConfig,
-  mergeWithDefaults,
-  validateConfig,
-  getVoiceConfig,
-  hashVoiceConfig,
-  hashConfig,
-  updateVoiceConfig,
-  createConfigForSpeakers,
-  getApiKey,
-  getConfigSummary,
-  exportConfigTemplate,
-  resolveEnvVars,
-  DEFAULT_CONFIG,
-  DEFAULT_VOICES,
-  GEMINI_VOICES,
-  type GeminiVoice,
-  type ConfigValidationResult,
-} from "./config.js";
-
-// Export cache functions
-export {
-  hashText,
-  shortHash,
-  generateSegmentHash,
-  getCacheDir,
-  getCacheManifestPath,
-  getCachedSegmentPath,
-  ensureCacheDir,
-  createEmptyManifest,
-  loadCacheManifest,
-  saveCacheManifest,
-  isSegmentCached,
-  verifyCachedSegment,
-  updateCachedSegment,
-  removeCachedSegment,
-  getSegmentsToGenerate,
-  getCachedSegments,
-  getSegmentsWithStyleChanges,
-  cleanStaleCacheEntries,
-  updateSegmentIdsWithStyle,
-  getCacheStats,
-  clearCache,
-  getCacheDirSize,
-  formatBytes,
-  getCacheSummary,
-  updateManifestStats,
-  invalidateSpeakerCache,
-  CACHE_DIR_NAME,
-  CACHE_MANIFEST_NAME,
-  CACHE_VERSION,
-} from "./cache.js";
-
-// Export TTS provider functions and classes
-export {
-  GeminiTTSProvider,
-  createTTSProvider,
-  generateSegmentAudio,
-  formatDuration as formatTTSDuration,
-  type TTSProvider,
-} from "./tts-provider.js";
-
-// Export utility functions
-export {
-  debugLog,
-  setDebugLogCacheDir,
-  getDebugLogCacheDir,
-  processWithConcurrency,
-  type ProcessResult,
-} from "./utils.js";
-
-// Export constants
-export { DEFAULT_CONCURRENCY } from "./types.js";
-
-// Export audio functions
-export {
-  stitchAudioFiles,
-  stitchCachedSegments,
-  saveManifest,
-  loadManifest,
-  getWavInfo,
-  formatDuration,
-  formatFileSize,
-  estimateCost,
-  estimateAudioDuration,
-  getStitchSummary,
-  type AudioFileInfo,
-  type StitchResult,
-} from "./audio.js";
-
-// Export converter functions
-export {
-  convertToStoryFormat,
-  convertWithGemini,
-  convertLargeDocument,
-  extractSpeakers as extractSpeakersFromConverted,
-  validateConvertedContent,
-  postProcessContent,
-  getConversionPrompt,
-  splitIntoChunks,
-  estimateTokenCount,
-  type ConversionOptions,
-  type ConversionResult,
-} from "./converter.js";
-
 // Export analyzer functions
 export {
-  analyzeStory,
-  formatAnalysisResult,
-  getSpeakerListForConvert,
-  getAnalysisPrompt,
-  getSupportedProviders,
-  getDefaultModel,
-  getApiKeyEnvVar,
-  getDefaultModelId,
-  type Gender,
-  type Character,
-  type AnalysisOptions,
-  type AnalysisResult,
-  type AnalysisProvider,
+	type AnalysisOptions,
+	type AnalysisProvider,
+	type AnalysisResult,
+	analyzeStory,
+	type Character,
+	formatAnalysisResult,
+	type Gender,
+	getAnalysisPrompt,
+	getApiKeyEnvVar,
+	getDefaultModel,
+	getDefaultModelId,
+	getSpeakerListForConvert,
+	getSupportedProviders,
 } from "./analyzer.js";
+// Export audio functions
+export {
+	type AudioFileInfo,
+	estimateAudioDuration,
+	estimateCost,
+	formatDuration,
+	formatFileSize,
+	getStitchSummary,
+	getWavInfo,
+	loadManifest,
+	type StitchResult,
+	saveManifest,
+	stitchAudioFiles,
+	stitchCachedSegments,
+} from "./audio.js";
+// Export cache functions
+export {
+	CACHE_DIR_NAME,
+	CACHE_MANIFEST_NAME,
+	CACHE_VERSION,
+	cleanStaleCacheEntries,
+	clearCache,
+	createEmptyManifest,
+	ensureCacheDir,
+	formatBytes,
+	generateSegmentHash,
+	getCacheDir,
+	getCacheDirSize,
+	getCachedSegmentPath,
+	getCachedSegments,
+	getCacheManifestPath,
+	getCacheStats,
+	getCacheSummary,
+	getSegmentsToGenerate,
+	getSegmentsWithStyleChanges,
+	hashText,
+	invalidateSpeakerCache,
+	isSegmentCached,
+	loadCacheManifest,
+	removeCachedSegment,
+	saveCacheManifest,
+	shortHash,
+	updateCachedSegment,
+	updateManifestStats,
+	updateSegmentIdsWithStyle,
+	verifyCachedSegment,
+} from "./cache.js";
+// Export config functions
+export {
+	type ConfigValidationResult,
+	createConfigForSpeakers,
+	DEFAULT_CONFIG,
+	DEFAULT_VOICES,
+	exportConfigTemplate,
+	GEMINI_VOICES,
+	type GeminiVoice,
+	getApiKey,
+	getConfigSummary,
+	getVoiceConfig,
+	hashConfig,
+	hashVoiceConfig,
+	loadConfig,
+	loadOrCreateConfig,
+	mergeWithDefaults,
+	resolveEnvVars,
+	saveConfig,
+	updateVoiceConfig,
+	validateConfig,
+} from "./config.js";
+// Export converter functions
+export {
+	type ConversionOptions,
+	type ConversionResult,
+	convertLargeDocument,
+	convertToStoryFormat,
+	convertWithGemini,
+	estimateTokenCount,
+	extractSpeakers as extractSpeakersFromConverted,
+	getConversionPrompt,
+	postProcessContent,
+	splitIntoChunks,
+	validateConvertedContent,
+} from "./converter.js";
+// Export parser functions
+export {
+	convertFormat,
+	detectFormat,
+	extractSpeakers,
+	filterBySpeaker,
+	getSegmentRange,
+	getStorySummary,
+	type ParserOptions,
+	parseContent,
+	parseFile,
+	type ValidationResult,
+	validateParsedStory,
+} from "./parser.js";
+// Export TTS provider functions and classes
+export {
+	createTTSProvider,
+	formatDuration as formatTTSDuration,
+	GeminiTTSProvider,
+	generateSegmentAudio,
+	type TTSProvider,
+} from "./tts-provider.js";
+// Export all types
+export type {
+	AudiobookManifest,
+	AudiobookResult,
+	AudioConfig,
+	CachedSegment,
+	CacheManifest,
+	CleanOptions,
+	Config,
+	// CLI types
+	GenerateOptions,
+	// Event types
+	GenerationEvent,
+	GenerationEventHandler,
+	GenerationProgress,
+	// Generation types
+	GenerationStats,
+	// Manifest types
+	ManifestSegment,
+	MultiSpeakerTTSRequest,
+	ParsedStory,
+	PreviewOptions,
+	ProviderConfig,
+	// Parser types
+	Segment,
+	SegmentGenerationResult,
+	// Cache types
+	SegmentHash,
+	// TTS types
+	TTSRequest,
+	TTSResponse,
+	UpdateStylesOptions,
+	// Config types
+	VoiceConfig,
+} from "./types.js";
+// Export constants
+export { DEFAULT_CONCURRENCY } from "./types.js";
+// Export utility functions
+export {
+	debugLog,
+	getDebugLogCacheDir,
+	type ProcessResult,
+	processWithConcurrency,
+	setDebugLogCacheDir,
+} from "./utils.js";
 
 // Export voice suggestion functions
 export {
-  GEMINI_VOICES_DATA,
-  getVoicesByGender,
-  getFemaleVoices,
-  getMaleVoices,
-  getNeutralVoices,
-  getVoiceByName,
-  suggestVoiceForCharacter,
-  suggestVoicesForAnalysis,
-  formatVoiceSuggestions,
-  suggestionsToVoiceConfigs,
-  formatVoiceSuggestionsAsConfig,
-  type VoiceInfo,
-  type VoiceSuggestion,
-  type VoicePitch,
-  type VoiceGender,
+	formatVoiceSuggestions,
+	formatVoiceSuggestionsAsConfig,
+	GEMINI_VOICES_DATA,
+	getFemaleVoices,
+	getMaleVoices,
+	getNeutralVoices,
+	getVoiceByName,
+	getVoicesByGender,
+	suggestionsToVoiceConfigs,
+	suggestVoiceForCharacter,
+	suggestVoicesForAnalysis,
+	type VoiceGender,
+	type VoiceInfo,
+	type VoicePitch,
+	type VoiceSuggestion,
 } from "./voices.js";
 
+import { createConfigForSpeakers, loadConfig } from "./config.js";
 // Re-export for convenience
 import { parseFile } from "./parser.js";
-import { loadConfig, createConfigForSpeakers } from "./config.js";
+import type { Config } from "./types.js";
 
 /**
  * Quick start function for programmatic usage
@@ -219,85 +211,86 @@ import { loadConfig, createConfigForSpeakers } from "./config.js";
  * ```
  */
 export async function quickGenerate(
-  storyPath: string,
-  outputDir: string,
-  options: {
-    apiKey?: string;
-    configPath?: string;
-  } = {},
+	storyPath: string,
+	outputDir: string,
+	options: {
+		apiKey?: string;
+		configPath?: string;
+	} = {},
 ): Promise<void> {
-  const { stitchAudioFiles } = await import("./audio.js");
-  const { ensureCacheDir, getCachedSegmentPath } = await import("./cache.js");
-  const { createTTSProvider, generateSegmentAudio } =
-    await import("./tts-provider.js");
-  const { mkdir } = await import("fs/promises");
-  const { join, basename, extname } = await import("path");
+	const { stitchAudioFiles } = await import("./audio.js");
+	const { ensureCacheDir, getCachedSegmentPath } = await import("./cache.js");
+	const { createTTSProvider, generateSegmentAudio } = await import(
+		"./tts-provider.js"
+	);
+	const { mkdir } = await import("node:fs/promises");
+	const { join, basename, extname } = await import("node:path");
 
-  // Parse story
-  const story = await parseFile(storyPath);
+	// Parse story
+	const story = await parseFile(storyPath);
 
-  // Load or create config
-  let config;
-  if (options.configPath) {
-    config = await loadConfig(options.configPath);
-  } else {
-    config = createConfigForSpeakers(story.speakers);
-  }
+	// Load or create config
+	let config: Config | undefined;
+	if (options.configPath) {
+		config = await loadConfig(options.configPath);
+	} else {
+		config = createConfigForSpeakers(story.speakers);
+	}
 
-  // Override API key if provided
-  if (options.apiKey) {
-    config.provider.apiKey = options.apiKey;
-  }
+	// Override API key if provided
+	if (options.apiKey) {
+		config.provider.apiKey = options.apiKey;
+	}
 
-  // Ensure output directory exists
-  await mkdir(outputDir, { recursive: true });
-  await ensureCacheDir(outputDir);
+	// Ensure output directory exists
+	await mkdir(outputDir, { recursive: true });
+	await ensureCacheDir(outputDir);
 
-  // Initialize provider
-  const provider = createTTSProvider(config);
-  await provider.initialize();
+	// Initialize provider
+	const provider = createTTSProvider(config);
+	await provider.initialize();
 
-  // Generate all segments
-  const audioFiles: Array<{
-    path: string;
-    index: number;
-    speaker: string;
-    text: string;
-  }> = [];
+	// Generate all segments
+	const audioFiles: Array<{
+		path: string;
+		index: number;
+		speaker: string;
+		text: string;
+	}> = [];
 
-  for (const segment of story.segments) {
-    const outputPath = getCachedSegmentPath(
-      outputDir,
-      segment.id,
-      config.audio.format,
-    );
+	for (const segment of story.segments) {
+		const outputPath = getCachedSegmentPath(
+			outputDir,
+			segment.id,
+			config.audio.format,
+		);
 
-    const response = await generateSegmentAudio(
-      provider,
-      segment,
-      config,
-      outputPath,
-    );
+		const response = await generateSegmentAudio(
+			provider,
+			segment,
+			config,
+			outputPath,
+		);
 
-    if (response.success && response.audioPath) {
-      audioFiles.push({
-        path: response.audioPath,
-        index: segment.index,
-        speaker: segment.speaker,
-        text: segment.text,
-      });
-    }
-  }
+		if (response.success && response.audioPath) {
+			audioFiles.push({
+				path: response.audioPath,
+				index: segment.index,
+				speaker: segment.speaker,
+				text: segment.text,
+			});
+		}
+	}
 
-  // Stitch together
-  const outputFileName = `${basename(storyPath, extname(storyPath))}_audiobook.wav`;
-  const outputPath = join(outputDir, outputFileName);
+	// Stitch together
+	const outputFileName = `${basename(storyPath, extname(storyPath))}_audiobook.wav`;
+	const outputPath = join(outputDir, outputFileName);
 
-  await stitchAudioFiles(audioFiles, outputPath, {
-    silencePaddingMs: config.audio.silencePadding,
-    title: basename(storyPath, extname(storyPath)),
-    sourceFile: storyPath,
-  });
+	await stitchAudioFiles(audioFiles, outputPath, {
+		silencePaddingMs: config.audio.silencePadding,
+		title: basename(storyPath, extname(storyPath)),
+		sourceFile: storyPath,
+	});
 
-  console.log(`Audiobook generated: ${outputPath}`);
+	console.log(`Audiobook generated: ${outputPath}`);
 }

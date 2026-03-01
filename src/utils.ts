@@ -2,7 +2,7 @@
  * Utility functions for the audiobook generation system
  */
 
-import { appendFile } from "fs/promises";
+import { appendFile } from "node:fs/promises";
 
 // ============================================================================
 // Debug Logging
@@ -19,14 +19,14 @@ let debugLogCacheDir: string | null = null;
  * When set, debug logs will be written to {cacheDir}/debug.log
  */
 export function setDebugLogCacheDir(cacheDir: string | null): void {
-  debugLogCacheDir = cacheDir;
+	debugLogCacheDir = cacheDir;
 }
 
 /**
  * Get the current debug log cache directory
  */
 export function getDebugLogCacheDir(): string | null {
-  return debugLogCacheDir;
+	return debugLogCacheDir;
 }
 
 // ============================================================================
@@ -37,16 +37,16 @@ export function getDebugLogCacheDir(): string | null {
  * Result of processing a single item
  */
 export interface ProcessResult<T, R> {
-  /** The original item that was processed */
-  item: T;
-  /** Index of the item in the original array */
-  index: number;
-  /** Whether processing was successful */
-  success: boolean;
-  /** The result if successful */
-  result?: R;
-  /** Error message if failed */
-  error?: string;
+	/** The original item that was processed */
+	item: T;
+	/** Index of the item in the original array */
+	index: number;
+	/** Whether processing was successful */
+	success: boolean;
+	/** The result if successful */
+	result?: R;
+	/** Error message if failed */
+	error?: string;
 }
 
 /**
@@ -58,64 +58,64 @@ export interface ProcessResult<T, R> {
  * @returns Array of results in the same order as input items
  */
 export async function processWithConcurrency<T, R>(
-  items: T[],
-  processor: (item: T, index: number) => Promise<R>,
-  options: {
-    /** Maximum concurrent operations (default: 4) */
-    concurrency?: number;
-    /** Callback when an item completes (for progress updates) */
-    onProgress?: (
-      completed: number,
-      total: number,
-      result: ProcessResult<T, R>,
-    ) => void;
-    /** Whether to stop on first error (default: false) */
-    stopOnError?: boolean;
-  } = {},
+	items: T[],
+	processor: (item: T, index: number) => Promise<R>,
+	options: {
+		/** Maximum concurrent operations (default: 4) */
+		concurrency?: number;
+		/** Callback when an item completes (for progress updates) */
+		onProgress?: (
+			completed: number,
+			total: number,
+			result: ProcessResult<T, R>,
+		) => void;
+		/** Whether to stop on first error (default: false) */
+		stopOnError?: boolean;
+	} = {},
 ): Promise<ProcessResult<T, R>[]> {
-  const { concurrency = 4, onProgress, stopOnError = false } = options;
-  const results: ProcessResult<T, R>[] = new Array(items.length);
-  let completedCount = 0;
-  let hasError = false;
+	const { concurrency = 4, onProgress, stopOnError = false } = options;
+	const results: ProcessResult<T, R>[] = new Array(items.length);
+	let completedCount = 0;
+	let hasError = false;
 
-  // Process items using a semaphore pattern
-  const semaphore = new Array(Math.min(concurrency, items.length)).fill(null);
-  let nextIndex = 0;
+	// Process items using a semaphore pattern
+	const semaphore = new Array(Math.min(concurrency, items.length)).fill(null);
+	let nextIndex = 0;
 
-  const processNext = async (_slotIndex: number): Promise<void> => {
-    while (nextIndex < items.length && !(stopOnError && hasError)) {
-      const currentIndex = nextIndex++;
-      const item = items[currentIndex];
+	const processNext = async (_slotIndex: number): Promise<void> => {
+		while (nextIndex < items.length && !(stopOnError && hasError)) {
+			const currentIndex = nextIndex++;
+			const item = items[currentIndex];
 
-      try {
-        const result = await processor(item, currentIndex);
-        results[currentIndex] = {
-          item,
-          index: currentIndex,
-          success: true,
-          result,
-        };
-      } catch (err) {
-        hasError = true;
-        results[currentIndex] = {
-          item,
-          index: currentIndex,
-          success: false,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      }
+			try {
+				const result = await processor(item, currentIndex);
+				results[currentIndex] = {
+					item,
+					index: currentIndex,
+					success: true,
+					result,
+				};
+			} catch (err) {
+				hasError = true;
+				results[currentIndex] = {
+					item,
+					index: currentIndex,
+					success: false,
+					error: err instanceof Error ? err.message : String(err),
+				};
+			}
 
-      completedCount++;
-      if (onProgress) {
-        onProgress(completedCount, items.length, results[currentIndex]);
-      }
-    }
-  };
+			completedCount++;
+			if (onProgress) {
+				onProgress(completedCount, items.length, results[currentIndex]);
+			}
+		}
+	};
 
-  // Start concurrent workers
-  await Promise.all(semaphore.map((_, i) => processNext(i)));
+	// Start concurrent workers
+	await Promise.all(semaphore.map((_, i) => processNext(i)));
 
-  return results;
+	return results;
 }
 
 /**
@@ -127,32 +127,32 @@ export async function processWithConcurrency<T, R>(
  * 3. TTS_DEBUG_LOG file if the environment variable is set
  */
 export async function debugLog(message: string): Promise<void> {
-  const timestamp = new Date().toISOString();
-  const logMessage = `\n[${timestamp}]\n${message}\n`;
+	const timestamp = new Date().toISOString();
+	const logMessage = `\n[${timestamp}]\n${message}\n`;
 
-  if (process.env.NODE_ENV === "test") {
-    return;
-  }
+	if (process.env.NODE_ENV === "test") {
+		return;
+	}
 
-  // Always write to stderr (won't be corrupted by progress bar as badly)
-  process.stderr.write(logMessage);
+	// Always write to stderr (won't be corrupted by progress bar as badly)
+	process.stderr.write(logMessage);
 
-  // Write to cache folder debug.log if configured
-  if (debugLogCacheDir) {
-    try {
-      const debugLogPath = `${debugLogCacheDir}/debug.log`;
-      await appendFile(debugLogPath, logMessage);
-    } catch {
-      // Ignore file write errors
-    }
-  }
+	// Write to cache folder debug.log if configured
+	if (debugLogCacheDir) {
+		try {
+			const debugLogPath = `${debugLogCacheDir}/debug.log`;
+			await appendFile(debugLogPath, logMessage);
+		} catch {
+			// Ignore file write errors
+		}
+	}
 
-  // Also write to env var file if configured (for backwards compatibility)
-  if (DEBUG_LOG_FILE) {
-    try {
-      await appendFile(DEBUG_LOG_FILE, logMessage);
-    } catch {
-      // Ignore file write errors
-    }
-  }
+	// Also write to env var file if configured (for backwards compatibility)
+	if (DEBUG_LOG_FILE) {
+		try {
+			await appendFile(DEBUG_LOG_FILE, logMessage);
+		} catch {
+			// Ignore file write errors
+		}
+	}
 }

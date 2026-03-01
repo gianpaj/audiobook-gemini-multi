@@ -135,15 +135,18 @@ export const MULTI_SPEAKER_STORY = `
  * Expected parsed segments for BRACKET_FORMAT_STORY
  */
 export const EXPECTED_BRACKET_SEGMENTS = [
-  { speaker: "NARRATOR", text: "Once upon a time, there was a small village." },
-  { speaker: "NARRATOR", text: "In this village lived a young girl named Alice." },
-  { speaker: "ALICE", text: "Hello, world! I'm so happy to be here." },
-  { speaker: "NARRATOR", text: "Alice loved to explore the forest nearby." },
-  { speaker: "BOB", text: "Hey Alice, where are you going?" },
-  { speaker: "ALICE", text: "I'm going to find the magic tree!" },
-  { speaker: "BOB", text: "Can I come with you?" },
-  { speaker: "ALICE", text: "Of course! Let's go together." },
-  { speaker: "NARRATOR", text: "And so, their adventure began." },
+	{ speaker: "NARRATOR", text: "Once upon a time, there was a small village." },
+	{
+		speaker: "NARRATOR",
+		text: "In this village lived a young girl named Alice.",
+	},
+	{ speaker: "ALICE", text: "Hello, world! I'm so happy to be here." },
+	{ speaker: "NARRATOR", text: "Alice loved to explore the forest nearby." },
+	{ speaker: "BOB", text: "Hey Alice, where are you going?" },
+	{ speaker: "ALICE", text: "I'm going to find the magic tree!" },
+	{ speaker: "BOB", text: "Can I come with you?" },
+	{ speaker: "ALICE", text: "Of course! Let's go together." },
+	{ speaker: "NARRATOR", text: "And so, their adventure began." },
 ];
 
 /**
@@ -154,4 +157,9 @@ export const EXPECTED_BRACKET_SPEAKERS = ["ALICE", "BOB", "NARRATOR"];
 /**
  * Expected speakers for MULTI_SPEAKER_STORY
  */
-export const EXPECTED_MULTI_SPEAKERS = ["HERO", "NARRATOR", "SIDEKICK", "VILLAIN"];
+export const EXPECTED_MULTI_SPEAKERS = [
+	"HERO",
+	"NARRATOR",
+	"SIDEKICK",
+	"VILLAIN",
+];

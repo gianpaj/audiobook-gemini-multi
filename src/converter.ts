@@ -12,36 +12,36 @@ import { GoogleGenAI } from "@google/genai";
 // ============================================================================
 
 export interface ConversionOptions {
-  /** API key for LLM provider */
-  apiKey?: string;
-  /** Model to use for conversion */
-  model?: string;
-  /** Custom speakers to use (optional, LLM will auto-detect if not provided) */
-  speakers?: string[];
-  /** Whether to include a NARRATOR for non-dialogue text */
-  includeNarrator?: boolean;
-  /** Output format: 'bracket' for [SPEAKER] or 'colon' for SPEAKER: */
-  format?: "bracket" | "colon";
-  /** Maximum tokens for input (will chunk if exceeded) */
-  maxInputTokens?: number;
+	/** API key for LLM provider */
+	apiKey?: string;
+	/** Model to use for conversion */
+	model?: string;
+	/** Custom speakers to use (optional, LLM will auto-detect if not provided) */
+	speakers?: string[];
+	/** Whether to include a NARRATOR for non-dialogue text */
+	includeNarrator?: boolean;
+	/** Output format: 'bracket' for [SPEAKER] or 'colon' for SPEAKER: */
+	format?: "bracket" | "colon";
+	/** Maximum tokens for input (will chunk if exceeded) */
+	maxInputTokens?: number;
 }
 
 export interface ConversionResult {
-  /** Whether conversion was successful */
-  success: boolean;
-  /** Converted story content */
-  content?: string;
-  /** Detected or used speakers */
-  speakers?: string[];
-  /** The model that was used for conversion */
-  model?: string;
-  /** Error message if conversion failed */
-  error?: string;
-  /** Token usage information */
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-  };
+	/** Whether conversion was successful */
+	success: boolean;
+	/** Converted story content */
+	content?: string;
+	/** Detected or used speakers */
+	speakers?: string[];
+	/** The model that was used for conversion */
+	model?: string;
+	/** Error message if conversion failed */
+	error?: string;
+	/** Token usage information */
+	usage?: {
+		inputTokens: number;
+		outputTokens: number;
+	};
 }
 
 // ============================================================================
@@ -68,27 +68,30 @@ Rules:
 - If a character's name is mentioned in the prose, use that exact name (uppercased) as the speaker tag`;
 
 function createConversionPrompt(
-  text: string,
-  options: ConversionOptions,
+	text: string,
+	options: ConversionOptions,
 ): string {
-  const formatExample =
-    options.format === "colon"
-      ? `NARRATOR: Once upon a time, there was a young girl named Alice.
+	const formatExample =
+		options.format === "colon"
+			? `NARRATOR: Once upon a time, there was a young girl named Alice.
 ALICE: Hello! Is anyone there?
 NARRATOR: She called out into the darkness.
 BOB: I'm here! Don't worry.
 NARRATOR: A friendly voice answered back.`
-      : `[NARRATOR] Once upon a time, there was a young girl named Alice.
+			: `[NARRATOR] Once upon a time, there was a young girl named Alice.
 [ALICE] Hello! Is anyone there?
 [NARRATOR] She called out into the darkness.
 [ALICE] <breathless high laugh — running out of air> oh, you crack me up!
 [BOB] I'm here! Don't worry.
 [NARRATOR] A friendly voice answered back.`;
 
-  let prompt = `Convert the following text into speaker-tagged format for audiobook generation.
+	let prompt = `Convert the following text into speaker-tagged format for audiobook generation.
 
 Do not write single phrases without words: e.g. [SANYA] <tiny soft high sound, short>
 Remember this is a Text to Speech model. It cannot make background sounds neither.
+
+Do not end sentences with , (comma) or . (dots): e.g. [NARRATOR] she said,
+It should be like: [NARRATOR] she said
 
 Output Format: ${options.format === "colon" ? "SPEAKER: dialogue" : "[SPEAKER] dialogue"}
 
@@ -97,22 +100,22 @@ ${formatExample}
 
 `;
 
-  if (options.speakers && options.speakers.length > 0) {
-    prompt += `Use these specific speaker names: ${options.speakers.join(", ")}\n\n`;
-  }
+	if (options.speakers && options.speakers.length > 0) {
+		prompt += `Use these specific speaker names: ${options.speakers.join(", ")}\n\n`;
+	}
 
-  if (options.includeNarrator === false) {
-    prompt += `Note: Do not include a NARRATOR. Only include direct dialogue from characters.\n\n`;
-  }
+	if (options.includeNarrator === false) {
+		prompt += `Note: Do not include a NARRATOR. Only include direct dialogue from characters.\n\n`;
+	}
 
-  prompt += `Text to convert:
+	prompt += `Text to convert:
 ---
 ${text}
 ---
 
 Output the converted text only, with no additional commentary:`;
 
-  return prompt;
+	return prompt;
 }
 
 // ============================================================================
@@ -123,301 +126,302 @@ Output the converted text only, with no additional commentary:`;
  * Convert plain text to speaker-tagged format using Gemini
  */
 export async function convertWithGemini(
-  text: string,
-  options: ConversionOptions = {},
+	text: string,
+	options: ConversionOptions = {},
 ): Promise<ConversionResult> {
-  const apiKey = options.apiKey || process.env.GEMINI_API_KEY;
+	const apiKey = options.apiKey || process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    return {
-      success: false,
-      error:
-        "API key is required. Set GEMINI_API_KEY environment variable or pass apiKey option.",
-    };
-  }
+	if (!apiKey) {
+		return {
+			success: false,
+			error:
+				"API key is required. Set GEMINI_API_KEY environment variable or pass apiKey option.",
+		};
+	}
 
-  const model = options.model || "gemini-3.1-pro-preview";
-  // const model = options.model || "gemini-3-flash-preview";
-  const format = options.format || "bracket";
+	const model = options.model || "gemini-3.1-pro-preview";
+	// const model = options.model || "gemini-3-flash-preview";
+	const format = options.format || "bracket";
 
-  try {
-    const client = new GoogleGenAI({ apiKey });
+	try {
+		const client = new GoogleGenAI({ apiKey });
 
-    const prompt = createConversionPrompt(text, { ...options, format });
+		const prompt = createConversionPrompt(text, { ...options, format });
 
-    const response = await client.models.generateContent({
-      model,
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
-        },
-      ],
-      config: {
-        temperature: 0.3, // Lower temperature for more consistent formatting
-        systemInstruction: SYSTEM_PROMPT,
-      },
-    });
+		const response = await client.models.generateContent({
+			model,
+			contents: [
+				{
+					role: "user",
+					parts: [{ text: prompt }],
+				},
+			],
+			config: {
+				temperature: 0.3, // Lower temperature for more consistent formatting
+				systemInstruction: SYSTEM_PROMPT,
+			},
+		});
 
-    const content = response.text?.trim();
+		const content = response.text?.trim();
 
-    if (!content) {
-      return {
-        success: false,
-        error: "No content received from LLM",
-      };
-    }
+		if (!content) {
+			return {
+				success: false,
+				error: "No content received from LLM",
+			};
+		}
 
-    // Extract speakers from the converted content
-    const speakers = extractSpeakers(content, format);
+		// Extract speakers from the converted content
+		const speakers = extractSpeakers(content, format);
 
-    return {
-      success: true,
-      content,
-      speakers,
-      model,
-      usage: {
-        inputTokens: response.usageMetadata?.promptTokenCount || 0,
-        outputTokens: response.usageMetadata?.candidatesTokenCount || 0,
-      },
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      error: `Conversion failed: ${errorMessage}`,
-    };
-  }
+		return {
+			success: true,
+			content,
+			speakers,
+			model,
+			usage: {
+				inputTokens: response.usageMetadata?.promptTokenCount || 0,
+				outputTokens: response.usageMetadata?.candidatesTokenCount || 0,
+			},
+		};
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		return {
+			success: false,
+			error: `Conversion failed: ${errorMessage}`,
+		};
+	}
 }
 
 /**
  * Extract unique speakers from converted content
  */
 export function extractSpeakers(
-  content: string,
-  format: "bracket" | "colon" = "bracket",
+	content: string,
+	format: "bracket" | "colon" = "bracket",
 ): string[] {
-  const speakers = new Set<string>();
+	const speakers = new Set<string>();
 
-  const lines = content.split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+	const lines = content.split("\n");
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (!trimmed) continue;
 
-    let speaker: string | null = null;
+		let speaker: string | null = null;
 
-    if (format === "bracket") {
-      const match = trimmed.match(/^\[([A-Z][A-Z0-9_]*)\]/);
-      if (match) {
-        speaker = match[1];
-      }
-    } else {
-      const match = trimmed.match(/^([A-Z][A-Z0-9_]*):/);
-      if (match) {
-        speaker = match[1];
-      }
-    }
+		if (format === "bracket") {
+			const match = trimmed.match(/^\[([A-Z][A-Z0-9_]*)\]/);
+			if (match) {
+				speaker = match[1];
+			}
+		} else {
+			const match = trimmed.match(/^([A-Z][A-Z0-9_]*):/);
+			if (match) {
+				speaker = match[1];
+			}
+		}
 
-    if (speaker) {
-      speakers.add(speaker);
-    }
-  }
+		if (speaker) {
+			speakers.add(speaker);
+		}
+	}
 
-  return Array.from(speakers).sort();
+	return Array.from(speakers).sort();
 }
 
 /**
  * Validate converted content format
  */
 export function validateConvertedContent(
-  content: string,
-  format: "bracket" | "colon" = "bracket",
+	content: string,
+	format: "bracket" | "colon" = "bracket",
 ): { valid: boolean; errors: string[]; lineCount: number } {
-  const errors: string[] = [];
-  const lines = content.split("\n");
-  let validLineCount = 0;
+	const errors: string[] = [];
+	const lines = content.split("\n");
+	let validLineCount = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue; // Skip empty lines
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i].trim();
+		if (!line) continue; // Skip empty lines
 
-    const lineNum = i + 1;
-    let isValid = false;
+		const lineNum = i + 1;
+		let isValid = false;
 
-    if (format === "bracket") {
-      isValid = /^\[[A-Z][A-Z0-9_]*\]\s+.+/.test(line);
-      if (!isValid && line.length > 0) {
-        errors.push(
-          `Line ${lineNum}: Invalid format. Expected [SPEAKER] text, got: "${line.substring(0, 50)}..."`,
-        );
-      }
-    } else {
-      isValid = /^[A-Z][A-Z0-9_]*:\s+.+/.test(line);
-      if (!isValid && line.length > 0) {
-        errors.push(
-          `Line ${lineNum}: Invalid format. Expected SPEAKER: text, got: "${line.substring(0, 50)}..."`,
-        );
-      }
-    }
+		if (format === "bracket") {
+			isValid = /^\[[A-Z][A-Z0-9_]*\]\s+.+/.test(line);
+			if (!isValid && line.length > 0) {
+				errors.push(
+					`Line ${lineNum}: Invalid format. Expected [SPEAKER] text, got: "${line.substring(0, 50)}..."`,
+				);
+			}
+		} else {
+			isValid = /^[A-Z][A-Z0-9_]*:\s+.+/.test(line);
+			if (!isValid && line.length > 0) {
+				errors.push(
+					`Line ${lineNum}: Invalid format. Expected SPEAKER: text, got: "${line.substring(0, 50)}..."`,
+				);
+			}
+		}
 
-    if (isValid) {
-      validLineCount++;
-    }
-  }
+		if (isValid) {
+			validLineCount++;
+		}
+	}
 
-  return {
-    valid: errors.length === 0,
-    errors,
-    lineCount: validLineCount,
-  };
+	return {
+		valid: errors.length === 0,
+		errors,
+		lineCount: validLineCount,
+	};
 }
 
 /**
  * Post-process converted content to fix common issues
  */
 export function postProcessContent(
-  content: string,
-  format: "bracket" | "colon" = "bracket",
+	content: string,
+	format: "bracket" | "colon" = "bracket",
 ): string {
-  let lines = content.split("\n");
+	let lines = content.split("\n");
 
-  // Remove empty lines
-  lines = lines.filter((line) => line.trim().length > 0);
+	// Remove empty lines
+	lines = lines.filter((line) => line.trim().length > 0);
 
-  // Fix common formatting issues
-  lines = lines.map((line) => {
-    let trimmed = line.trim();
+	// Fix common formatting issues
+	lines = lines.map((line) => {
+		let trimmed = line.trim();
 
-    // Fix missing space after speaker tag
-    if (format === "bracket") {
-      trimmed = trimmed.replace(/^\[([A-Z][A-Z0-9_]*)\]([^\s])/, "[$1] $2");
-    } else {
-      trimmed = trimmed.replace(/^([A-Z][A-Z0-9_]*):([^\s])/, "$1: $2");
-    }
+		// Fix missing space after speaker tag
+		if (format === "bracket") {
+			trimmed = trimmed.replace(/^\[([A-Z][A-Z0-9_]*)\]([^\s])/, "[$1] $2");
+		} else {
+			trimmed = trimmed.replace(/^([A-Z][A-Z0-9_]*):([^\s])/, "$1: $2");
+		}
 
-    // Normalize multiple spaces
-    trimmed = trimmed.replace(/\s+/g, " ");
+		// Normalize multiple spaces
+		trimmed = trimmed.replace(/\s+/g, " ");
 
-    return trimmed;
-  });
+		return trimmed;
+	});
 
-  return lines.join("\n");
+	return lines.join("\n");
 }
 
 /**
  * Estimate token count for text (rough approximation)
  */
 export function estimateTokenCount(text: string): number {
-  // Rough estimate: ~4 characters per token for English
-  return Math.ceil(text.length / 4);
+	// Rough estimate: ~4 characters per token for English
+	return Math.ceil(text.length / 4);
 }
 
 /**
  * Split text into chunks for processing large documents
  */
 export function splitIntoChunks(
-  text: string,
-  maxTokens: number = 8000,
+	text: string,
+	maxTokens: number = 8000,
 ): string[] {
-  const estimatedTokens = estimateTokenCount(text);
+	const estimatedTokens = estimateTokenCount(text);
 
-  if (estimatedTokens <= maxTokens) {
-    return [text];
-  }
+	if (estimatedTokens <= maxTokens) {
+		return [text];
+	}
 
-  // Split by paragraphs (double newline)
-  const paragraphs = text.split(/\n\n+/);
-  const chunks: string[] = [];
-  let currentChunk = "";
+	// Split by paragraphs (double newline)
+	const paragraphs = text.split(/\n\n+/);
+	const chunks: string[] = [];
+	let currentChunk = "";
 
-  for (const paragraph of paragraphs) {
-    const newChunk = currentChunk
-      ? `${currentChunk}\n\n${paragraph}`
-      : paragraph;
-    const newTokens = estimateTokenCount(newChunk);
+	for (const paragraph of paragraphs) {
+		const newChunk = currentChunk
+			? `${currentChunk}\n\n${paragraph}`
+			: paragraph;
+		const newTokens = estimateTokenCount(newChunk);
 
-    if (newTokens > maxTokens && currentChunk) {
-      chunks.push(currentChunk);
-      currentChunk = paragraph;
-    } else {
-      currentChunk = newChunk;
-    }
-  }
+		if (newTokens > maxTokens && currentChunk) {
+			chunks.push(currentChunk);
+			currentChunk = paragraph;
+		} else {
+			currentChunk = newChunk;
+		}
+	}
 
-  if (currentChunk) {
-    chunks.push(currentChunk);
-  }
+	if (currentChunk) {
+		chunks.push(currentChunk);
+	}
 
-  return chunks;
+	return chunks;
 }
 
 /**
  * Convert a large document by processing in chunks
  */
 export async function convertLargeDocument(
-  text: string,
-  options: ConversionOptions = {},
+	text: string,
+	options: ConversionOptions = {},
 ): Promise<ConversionResult> {
-  const maxTokens = options.maxInputTokens || 8000;
-  const chunks = splitIntoChunks(text, maxTokens);
+	const maxTokens = options.maxInputTokens || 8000;
+	const chunks = splitIntoChunks(text, maxTokens);
 
-  if (chunks.length === 1) {
-    return convertWithGemini(text, options);
-  }
+	if (chunks.length === 1) {
+		return convertWithGemini(text, options);
+	}
 
-  const results: string[] = [];
-  const allSpeakers = new Set<string>();
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
+	const results: string[] = [];
+	const allSpeakers = new Set<string>();
+	let totalInputTokens = 0;
+	let totalOutputTokens = 0;
 
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
+	for (let i = 0; i < chunks.length; i++) {
+		const chunk = chunks[i];
 
-    // For subsequent chunks, pass the speakers we've seen so far
-    const chunkOptions: ConversionOptions = {
-      ...options,
-      speakers:
-        i > 0 && allSpeakers.size > 0
-          ? Array.from(allSpeakers)
-          : options.speakers,
-    };
+		// For subsequent chunks, pass the speakers we've seen so far
+		const chunkOptions: ConversionOptions = {
+			...options,
+			speakers:
+				i > 0 && allSpeakers.size > 0
+					? Array.from(allSpeakers)
+					: options.speakers,
+		};
 
-    const result = await convertWithGemini(chunk, chunkOptions);
+		const result = await convertWithGemini(chunk, chunkOptions);
 
-    if (!result.success) {
-      return {
-        success: false,
-        error: `Failed to convert chunk ${i + 1}/${chunks.length}: ${result.error}`,
-      };
-    }
+		if (!result.success) {
+			return {
+				success: false,
+				error: `Failed to convert chunk ${i + 1}/${chunks.length}: ${result.error}`,
+			};
+		}
 
-    results.push(result.content!);
+		// biome-ignore lint/style/noNonNullAssertion: result.content is guaranteed to exist when success is true
+		results.push(result.content!);
 
-    if (result.speakers) {
-      for (const speaker of result.speakers) {
-        allSpeakers.add(speaker);
-      }
-    }
+		if (result.speakers) {
+			for (const speaker of result.speakers) {
+				allSpeakers.add(speaker);
+			}
+		}
 
-    if (result.usage) {
-      totalInputTokens += result.usage.inputTokens;
-      totalOutputTokens += result.usage.outputTokens;
-    }
-  }
+		if (result.usage) {
+			totalInputTokens += result.usage.inputTokens;
+			totalOutputTokens += result.usage.outputTokens;
+		}
+	}
 
-  const content = results.join("\n");
-  const model = options.model || "gemini-3.1-pro-preview";
+	const content = results.join("\n");
+	const model = options.model || "gemini-3.1-pro-preview";
 
-  return {
-    success: true,
-    content: postProcessContent(content, options.format || "bracket"),
-    speakers: Array.from(allSpeakers).sort(),
-    model,
-    usage: {
-      inputTokens: totalInputTokens,
-      outputTokens: totalOutputTokens,
-    },
-  };
+	return {
+		success: true,
+		content: postProcessContent(content, options.format || "bracket"),
+		speakers: Array.from(allSpeakers).sort(),
+		model,
+		usage: {
+			inputTokens: totalInputTokens,
+			outputTokens: totalOutputTokens,
+		},
+	};
 }
 
 // ============================================================================
@@ -428,52 +432,52 @@ export async function convertLargeDocument(
  * Convert text with automatic chunking and post-processing
  */
 export async function convertToStoryFormat(
-  text: string,
-  options: ConversionOptions = {},
+	text: string,
+	options: ConversionOptions = {},
 ): Promise<ConversionResult> {
-  const result = await convertLargeDocument(text, options);
+	const result = await convertLargeDocument(text, options);
 
-  if (!result.success || !result.content) {
-    return result;
-  }
+	if (!result.success || !result.content) {
+		return result;
+	}
 
-  // Post-process the content
-  const processedContent = postProcessContent(
-    result.content,
-    options.format || "bracket",
-  );
+	// Post-process the content
+	const processedContent = postProcessContent(
+		result.content,
+		options.format || "bracket",
+	);
 
-  // Validate the result
-  const validation = validateConvertedContent(
-    processedContent,
-    options.format || "bracket",
-  );
+	// Validate the result
+	const validation = validateConvertedContent(
+		processedContent,
+		options.format || "bracket",
+	);
 
-  if (!validation.valid) {
-    console.warn(
-      "Warning: Converted content has formatting issues:",
-      validation.errors.slice(0, 5),
-    );
-  }
+	if (!validation.valid) {
+		console.warn(
+			"Warning: Converted content has formatting issues:",
+			validation.errors.slice(0, 5),
+		);
+	}
 
-  return {
-    ...result,
-    content: processedContent,
-  };
+	return {
+		...result,
+		content: processedContent,
+	};
 }
 
 /**
  * Get the conversion prompt for manual use or debugging
  */
 export function getConversionPrompt(
-  text: string,
-  options: ConversionOptions = {},
+	text: string,
+	options: ConversionOptions = {},
 ): { systemPrompt: string; userPrompt: string } {
-  return {
-    systemPrompt: SYSTEM_PROMPT,
-    userPrompt: createConversionPrompt(text, {
-      ...options,
-      format: options.format || "bracket",
-    }),
-  };
+	return {
+		systemPrompt: SYSTEM_PROMPT,
+		userPrompt: createConversionPrompt(text, {
+			...options,
+			format: options.format || "bracket",
+		}),
+	};
 }
