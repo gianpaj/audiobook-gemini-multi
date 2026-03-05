@@ -472,7 +472,7 @@ ALICE: Another valid line.`;
 
 			const result = await convertWithGemini("Test text", {
 				apiKey: "test-key",
-				model: "gemini-3-pro-preview",
+				model: "gemini-3.1-pro-preview",
 			});
 
 			expect(result.success).toBe(true);

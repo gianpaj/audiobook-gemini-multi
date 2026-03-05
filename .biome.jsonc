@@ -3,7 +3,7 @@
   "vcs": {
     "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": true,
+    "useIgnoreFile": true
   },
   "files": {
     "ignoreUnknown": true,
@@ -15,13 +15,13 @@
       "!components/ui",
       "!.next",
       "!dist",
-      "!build",
-    ],
+      "!build"
+    ]
   },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
-    "indentWidth": 2,
+    "indentWidth": 2
   },
   "linter": {
     "enabled": true,
@@ -34,8 +34,8 @@
         "useConsistentTypeDefinitions": {
           "level": "warn",
           "options": {
-            "style": "interface",
-          },
+            "style": "interface"
+          }
         },
         "useBlockStatements": "off",
         "useEnumInitializers": "error",
@@ -53,27 +53,27 @@
         "useImportType": "error",
         "useExportType": "error",
         "noUselessElse": "error",
-        "useShorthandFunctionType": "error",
+        "useShorthandFunctionType": "error"
       },
       "suspicious": {
         "noArrayIndexKey": "off",
-        "noUnknownAtRules": "off",
+        "noUnknownAtRules": "off"
       },
       "correctness": {
-        "useUniqueElementIds": "off",
+        "useUniqueElementIds": "off"
       },
       "nursery": {
         "noShadow": "off",
-        "noLeakedRender": "off",
+        "noLeakedRender": "off"
       },
       "performance": {
-        "useTopLevelRegex": "off",
-      },
+        "useTopLevelRegex": "off"
+      }
     },
     "domains": {
       "next": "recommended",
-      "react": "recommended",
-    },
+      "react": "recommended"
+    }
   },
   "javascript": {
     "formatter": {
@@ -84,7 +84,7 @@
       "lineWidth": 80,
       "attributePosition": "auto",
       "quoteStyle": "single",
-      "trailingCommas": "all",
+      "trailingCommas": "all"
     },
   },
   "assist": {
@@ -100,17 +100,17 @@
               ":NODE:",
               ":PACKAGE:",
               ":BLANK_LINE:",
-              ":ALIAS:",
-            ],
-          },
-        },
-      },
-    },
+              ":ALIAS:"
+            ]
+          }
+        }
+      }
+    }
   },
   "css": {
     "parser": {
-      "tailwindDirectives": true,
-    },
+      "tailwindDirectives": true
+    }
   },
-  "extends": ["ultracite/core", "ultracite/next"],
+  "extends": ["ultracite/core", "ultracite/next"]
 }

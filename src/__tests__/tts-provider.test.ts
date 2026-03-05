@@ -13,6 +13,8 @@ import {
 	formatDuration,
 	GeminiTTSProvider,
 	generateSegmentAudio,
+	isShortVocalization,
+	varyShortVocalization,
 } from "../tts-provider.js";
 import type { Config, ProviderConfig, Segment, VoiceConfig } from "../types.js";
 
@@ -1102,6 +1104,90 @@ describe("tts-provider", () => {
 
 		it("should handle zero", () => {
 			expect(formatDuration(0)).toBe("0s");
+		});
+	});
+
+	describe("isShortVocalization", () => {
+		it("should detect short single-word vocalizations", () => {
+			expect(isShortVocalization("ahh")).toBe(true);
+			expect(isShortVocalization("mmm")).toBe(true);
+			expect(isShortVocalization("ohhh")).toBe(true);
+			expect(isShortVocalization("yes")).toBe(true);
+			expect(isShortVocalization("no")).toBe(true);
+		});
+
+		it("should detect vocalizations with style directive prefix", () => {
+			expect(isShortVocalization("<low sharp gasp> ahh")).toBe(true);
+			expect(isShortVocalization("<breathless> mmm")).toBe(true);
+			expect(isShortVocalization("<soft moan> ohhh")).toBe(true);
+		});
+
+		it("should reject multi-word text", () => {
+			expect(isShortVocalization("hello world")).toBe(false);
+			expect(isShortVocalization("oh my god")).toBe(false);
+			expect(isShortVocalization("<gasp> oh no")).toBe(false);
+		});
+
+		it("should reject empty or style-only text", () => {
+			expect(isShortVocalization("")).toBe(false);
+			expect(isShortVocalization("<gasp>")).toBe(false);
+			expect(isShortVocalization("<breathing sounds>")).toBe(false);
+		});
+
+		it("should reject long single words beyond 15 chars", () => {
+			expect(isShortVocalization("ahhhhhhhhhhhhhhhhh")).toBe(false);
+		});
+
+		it("should handle text with only whitespace after stripping directives", () => {
+			expect(isShortVocalization("<gasp>   ")).toBe(false);
+		});
+	});
+
+	describe("varyShortVocalization", () => {
+		it("should not modify text on attempt 0", () => {
+			expect(varyShortVocalization("ahh", 0)).toBe("ahh");
+			expect(varyShortVocalization("<gasp> ahh", 0)).toBe("<gasp> ahh");
+		});
+
+		it("should duplicate last letter on odd attempts", () => {
+			// attempt 1: add 1 repeated char
+			expect(varyShortVocalization("ahh", 1)).toBe("ahhh");
+			// attempt 3: add 2 repeated chars
+			expect(varyShortVocalization("ahh", 3)).toBe("ahhhh");
+		});
+
+		it("should add exclamation mark on even attempts", () => {
+			// attempt 2: add 1 "!"
+			expect(varyShortVocalization("ahh", 2)).toBe("ahh!");
+		});
+
+		it("should preserve style directive prefix", () => {
+			expect(varyShortVocalization("<low sharp gasp> ahh", 1)).toBe(
+				"<low sharp gasp> ahhh",
+			);
+			expect(varyShortVocalization("<low sharp gasp> ahh", 2)).toBe(
+				"<low sharp gasp> ahh!",
+			);
+		});
+
+		it("should not modify multi-word text", () => {
+			expect(varyShortVocalization("hello world", 1)).toBe("hello world");
+			expect(varyShortVocalization("oh my god", 2)).toBe("oh my god");
+		});
+
+		it("should not modify long text", () => {
+			const longText = "This is a longer sentence that should not be modified";
+			expect(varyShortVocalization(longText, 1)).toBe(longText);
+		});
+
+		it("should not modify style-only text (no word after directive)", () => {
+			expect(varyShortVocalization("<gasp>", 1)).toBe("<gasp>");
+		});
+
+		it("should handle words ending with different characters", () => {
+			expect(varyShortVocalization("mmm", 1)).toBe("mmmm");
+			expect(varyShortVocalization("yes", 1)).toBe("yess");
+			expect(varyShortVocalization("no", 2)).toBe("no!");
 		});
 	});
 });

@@ -162,6 +162,60 @@ const MAX_DURATION_FOR_SHORT_TEXT_MS = 5000;
  */
 const ABSOLUTE_MAX_DURATION_MS = 120000;
 
+// ============================================================================
+// Short Vocalization Text Variation
+// ============================================================================
+
+/**
+ * Check if the text (after stripping style directives) is a short single-word
+ * vocalization like "ahh", "mmm", "ohhh", etc.
+ */
+export function isShortVocalization(text: string): boolean {
+	const clean = text.replace(/<[^>]+>/g, "").trim();
+	// Single word, short (≤ 15 chars), and not empty
+	return clean.length > 0 && clean.length <= 15 && !/\s/.test(clean);
+}
+
+/**
+ * Add slight variation to a short vocalization text to help the TTS model
+ * produce output instead of failing with OTHER.
+ *
+ * On retry attempts, we either duplicate the last letter or append an
+ * exclamation mark. The style directive prefix (if any) is preserved.
+ *
+ * Examples:
+ *   attempt 1: "ahh"  → "ahhh"
+ *   attempt 2: "ahh"  → "ahh!"
+ *   attempt 3: "ahh"  → "ahhhh"
+ */
+export function varyShortVocalization(text: string, attempt: number): string {
+	if (attempt === 0 || !isShortVocalization(text)) {
+		return text;
+	}
+
+	// Split into style directive prefix and the actual word
+	const directiveMatch = text.match(/^(<[^>]+>\s*)/);
+	const prefix = directiveMatch ? directiveMatch[1] : "";
+	const word = text.slice(prefix.length).trim();
+
+	if (word.length === 0) return text;
+
+	let varied: string;
+	// Alternate between duplicating last char and adding "!"
+	if (attempt % 2 === 1) {
+		// Odd attempts: duplicate last letter (1× for attempt 1, 2× for attempt 3, etc.)
+		const repeatCount = Math.ceil(attempt / 2);
+		const lastChar = word[word.length - 1];
+		varied = word + lastChar.repeat(repeatCount);
+	} else {
+		// Even attempts: add exclamation mark(s)
+		const bangCount = attempt / 2;
+		varied = word + "!".repeat(bangCount);
+	}
+
+	return prefix ? `${prefix}${varied}` : varied;
+}
+
 /**
  * Estimate expected audio duration based on text length
  * Returns min and max expected duration in milliseconds
@@ -446,7 +500,8 @@ export class GeminiTTSProvider implements TTSProvider {
 						const model = this.config.model || "gemini-2.5-pro-preview-tts";
 
 						// Build the prompt with style instructions
-						let textPrompt = request.text;
+						// On retries, vary short vocalizations to help the model succeed
+						let textPrompt = varyShortVocalization(request.text, seedAttempt);
 						let stylePrompt = request.voice.stylePrompt;
 						if (stylePrompt) {
 							if (
@@ -458,7 +513,7 @@ export class GeminiTTSProvider implements TTSProvider {
 									"emotion_thought Only short moans, whimpers, gasps of overwhelming pleasure and surrender.emotion_intensity medium";
 								stylePrompt = soundPrompt;
 							}
-							textPrompt = `${stylePrompt}: ${request.text}`;
+							textPrompt = `${stylePrompt}: ${textPrompt}`;
 						}
 
 						const contents = [

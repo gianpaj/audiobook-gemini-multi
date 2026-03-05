@@ -9,99 +9,99 @@
  */
 
 import {
-  access,
-  mkdir,
-  readdir,
-  readFile,
-  unlink,
-  writeFile as writeFileFs,
+	access,
+	mkdir,
+	readdir,
+	readFile,
+	unlink,
+	writeFile as writeFileFs,
 } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 import ora from "ora";
 import {
-  type AnalysisOptions,
-  analyzeStory,
-  formatAnalysisResult,
-  getAnalysisPrompt,
-  getDefaultModelId,
-  getSpeakerListForConvert,
+	type AnalysisOptions,
+	analyzeStory,
+	formatAnalysisResult,
+	getAnalysisPrompt,
+	getDefaultModelId,
+	getSpeakerListForConvert,
 } from "./analyzer.js";
 import {
-  type AudioFileInfo,
-  estimateAudioDuration,
-  estimateCost,
-  formatFileSize,
-  getStitchSummary,
-  saveManifest,
-  stitchAudioFiles,
+	type AudioFileInfo,
+	estimateAudioDuration,
+	estimateCost,
+	formatFileSize,
+	getStitchSummary,
+	saveManifest,
+	stitchAudioFiles,
 } from "./audio.js";
 import {
-  clearCache,
-  createEmptyManifest,
-  ensureCacheDir,
-  getCacheDir,
-  getCachedSegmentPath,
-  getCachedSegments,
-  getCacheStats,
-  getCacheSummary,
-  getSegmentsToGenerate,
-  getSegmentsWithStyleChanges,
-  hashText,
-  loadCacheManifest,
-  recoverCachedSegments,
-  saveCacheManifest,
-  updateCachedSegment,
-  updateSegmentIdsWithStyle,
-  verifyCachedSegment,
+	clearCache,
+	createEmptyManifest,
+	ensureCacheDir,
+	getCacheDir,
+	getCachedSegmentPath,
+	getCachedSegments,
+	getCacheStats,
+	getCacheSummary,
+	getSegmentsToGenerate,
+	getSegmentsWithStyleChanges,
+	hashText,
+	loadCacheManifest,
+	recoverCachedSegments,
+	saveCacheManifest,
+	updateCachedSegment,
+	updateSegmentIdsWithStyle,
+	verifyCachedSegment,
 } from "./cache.js";
 
 import {
-  createConfigForSpeakers,
-  DEFAULT_CONFIG,
-  getConfigSummary,
-  hashConfig,
-  loadConfig,
-  loadOrCreateConfig,
-  saveConfig,
+	createConfigForSpeakers,
+	DEFAULT_CONFIG,
+	getConfigSummary,
+	hashConfig,
+	loadConfig,
+	loadOrCreateConfig,
+	saveConfig,
 } from "./config.js";
 import {
-  type ConversionOptions,
-  convertToStoryFormat,
-  getConversionPrompt,
-  validateConvertedContent,
+	type ConversionOptions,
+	convertToStoryFormat,
+	getConversionPrompt,
+	validateConvertedContent,
 } from "./converter.js";
 import {
-  filterBySpeaker,
-  getSegmentRange,
-  getStorySummary,
-  parseFile,
-  validateParsedStory,
+	filterBySpeaker,
+	getSegmentRange,
+	getStorySummary,
+	parseFile,
+	validateParsedStory,
 } from "./parser.js";
 
 import {
-  createTTSProvider,
-  formatDuration,
-  generateSegmentAudio,
-  type TTSProvider,
+	createTTSProvider,
+	formatDuration,
+	generateSegmentAudio,
+	type TTSProvider,
 } from "./tts-provider.js";
 import type {
-  AudiobookResult,
-  Config,
-  GenerateOptions,
-  ParsedStory,
-  PreviewOptions,
-  Segment,
-  SegmentGenerationResult,
+	AudiobookResult,
+	Config,
+	GenerateOptions,
+	ParsedStory,
+	PreviewOptions,
+	Segment,
+	SegmentGenerationResult,
 } from "./types.js";
 import { DEFAULT_CONCURRENCY } from "./types.js";
 import { processWithConcurrency, setDebugLogCacheDir } from "./utils.js";
 import {
-  formatVoiceSuggestions,
-  GEMINI_VOICES_DATA,
-  suggestionsToVoiceConfigs,
-  suggestVoicesForAnalysis,
+	formatVoiceSuggestions,
+	GEMINI_VOICES_DATA,
+	suggestionsToVoiceConfigs,
+	suggestVoicesForAnalysis,
 } from "./voices.js";
 
 // ============================================================================
@@ -112,55 +112,55 @@ import {
  * Check if a file exists
  */
 async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
+	try {
+		await access(path);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**
  * Get default config path
  */
 function getDefaultConfigPath(): string {
-  return "./config.json";
+	return "./config.json";
 }
 
 /**
  * Get default output directory
  */
 function getDefaultOutputDir(): string {
-  return "./output";
+	return "./output";
 }
 
 /**
  * Print error and exit
  */
 function exitWithError(message: string): never {
-  console.error(chalk.red(`\n✖ Error: ${message}\n`));
-  process.exit(1);
+	console.error(chalk.red(`\n✖ Error: ${message}\n`));
+	process.exit(1);
 }
 
 /**
  * Print warning
  */
 function printWarning(message: string): void {
-  console.warn(chalk.yellow(`⚠ Warning: ${message}`));
+	console.warn(chalk.yellow(`⚠ Warning: ${message}`));
 }
 
 /**
  * Print success
  */
 function printSuccess(message: string): void {
-  console.log(chalk.green(`✔ ${message}`));
+	console.log(chalk.green(`✔ ${message}`));
 }
 
 /**
  * Print info
  */
 function printInfo(message: string): void {
-  console.log(chalk.blue(`ℹ ${message}`));
+	console.log(chalk.blue(`ℹ ${message}`));
 }
 
 // ============================================================================
@@ -171,472 +171,472 @@ function printInfo(message: string): void {
  * Generate audiobook from a story file
  */
 async function generateAudiobook(
-  storyPath: string,
-  config: Config,
-  outputDir: string,
-  options: {
-    force?: boolean;
-    verbose?: boolean;
-    dryRun?: boolean;
-    maxSegments?: number;
-    startFrom?: number;
-    speakers?: string[];
-    timestamp?: string;
-    concurrency?: number;
-  } = {},
+	storyPath: string,
+	config: Config,
+	outputDir: string,
+	options: {
+		force?: boolean;
+		verbose?: boolean;
+		dryRun?: boolean;
+		maxSegments?: number;
+		startFrom?: number;
+		speakers?: string[];
+		timestamp?: string;
+		concurrency?: number;
+	} = {},
 ): Promise<AudiobookResult> {
-  const spinner = ora();
-  const errors: string[] = [];
-  const startTime = Date.now();
+	const spinner = ora();
+	const errors: string[] = [];
+	const startTime = Date.now();
 
-  // Parse the story
-  spinner.start("Parsing story file...");
-  let story: ParsedStory;
-  try {
-    story = await parseFile(storyPath);
-  } catch (error) {
-    spinner.fail("Failed to parse story file");
-    throw error;
-  }
-  spinner.succeed(
-    `Parsed story: ${story.segments.length} segments, ${story.speakers.length} speakers`,
-  );
+	// Parse the story
+	spinner.start("Parsing story file...");
+	let story: ParsedStory;
+	try {
+		story = await parseFile(storyPath);
+	} catch (error) {
+		spinner.fail("Failed to parse story file");
+		throw error;
+	}
+	spinner.succeed(
+		`Parsed story: ${story.segments.length} segments, ${story.speakers.length} speakers`,
+	);
 
-  // Validate the story
-  const validation = validateParsedStory(story);
-  if (!validation.valid) {
-    exitWithError(`Story validation failed:\n${validation.errors.join("\n")}`);
-  }
-  if (validation.warnings.length > 0) {
-    for (const warning of validation.warnings) {
-      printWarning(warning);
-    }
-  }
+	// Validate the story
+	const validation = validateParsedStory(story);
+	if (!validation.valid) {
+		exitWithError(`Story validation failed:\n${validation.errors.join("\n")}`);
+	}
+	if (validation.warnings.length > 0) {
+		for (const warning of validation.warnings) {
+			printWarning(warning);
+		}
+	}
 
-  // Apply filters if provided
-  let segmentsToProcess = story.segments;
-  if (options.speakers && options.speakers.length > 0) {
-    story = filterBySpeaker(story, options.speakers);
-    segmentsToProcess = story.segments;
-    printInfo(`Filtered to speakers: ${options.speakers.join(", ")}`);
-  }
-  if (options.startFrom !== undefined || options.maxSegments !== undefined) {
-    const start = options.startFrom || 0;
-    const count = options.maxSegments || segmentsToProcess.length;
-    story = getSegmentRange(story, start, count);
-    segmentsToProcess = story.segments;
-    printInfo(
-      `Processing segments ${start + 1} to ${start + segmentsToProcess.length}`,
-    );
-  }
+	// Apply filters if provided
+	let segmentsToProcess = story.segments;
+	if (options.speakers && options.speakers.length > 0) {
+		story = filterBySpeaker(story, options.speakers);
+		segmentsToProcess = story.segments;
+		printInfo(`Filtered to speakers: ${options.speakers.join(", ")}`);
+	}
+	if (options.startFrom !== undefined || options.maxSegments !== undefined) {
+		const start = options.startFrom || 0;
+		const count = options.maxSegments || segmentsToProcess.length;
+		story = getSegmentRange(story, start, count);
+		segmentsToProcess = story.segments;
+		printInfo(
+			`Processing segments ${start + 1} to ${start + segmentsToProcess.length}`,
+		);
+	}
 
-  // Update segment IDs to incorporate stylePrompt from config
-  // This ensures file names change when stylePrompt differs
-  updateSegmentIdsWithStyle(segmentsToProcess, config);
+	// Update segment IDs to incorporate stylePrompt from config
+	// This ensures file names change when stylePrompt differs
+	updateSegmentIdsWithStyle(segmentsToProcess, config);
 
-  if (options.verbose) {
-    console.log(`\n${getStorySummary(story)}\n`);
-  }
+	if (options.verbose) {
+		console.log(`\n${getStorySummary(story)}\n`);
+	}
 
-  // Ensure output directory exists
-  await mkdir(outputDir, { recursive: true });
+	// Ensure output directory exists
+	await mkdir(outputDir, { recursive: true });
 
-  // Generate folder hash from filename (stable across content changes)
-  // and content hash for change detection in manifest
-  const storyBasename = basename(storyPath, extname(storyPath));
-  const folderHash = hashText(storyBasename);
-  const contentHash = hashText(await readFile(storyPath, "utf-8"));
-  const configHash = hashConfig(config);
+	// Generate folder hash from filename (stable across content changes)
+	// and content hash for change detection in manifest
+	const storyBasename = basename(storyPath, extname(storyPath));
+	const folderHash = hashText(storyBasename);
+	const contentHash = hashText(await readFile(storyPath, "utf-8"));
+	const configHash = hashConfig(config);
 
-  // Use filename-based cache folder for stability
-  await ensureCacheDir(outputDir, folderHash);
-  const cacheDir = getCacheDir(outputDir, folderHash);
-  setDebugLogCacheDir(cacheDir);
-  printInfo(
-    `Using cache folder: ${folderHash.substring(0, 8)} (${storyBasename})`,
-  );
+	// Use filename-based cache folder for stability
+	await ensureCacheDir(outputDir, folderHash);
+	const cacheDir = getCacheDir(outputDir, folderHash);
+	setDebugLogCacheDir(cacheDir);
+	printInfo(
+		`Using cache folder: ${folderHash.substring(0, 8)} (${storyBasename})`,
+	);
 
-  // Load or create cache manifest
-  const loadedManifest = await loadCacheManifest(outputDir, folderHash);
+	// Load or create cache manifest
+	const loadedManifest = await loadCacheManifest(outputDir, folderHash);
 
-  if (
-    options.force ||
-    !loadedManifest ||
-    loadedManifest.storyHash !== contentHash ||
-    loadedManifest.configHash !== configHash
-  ) {
-    if (loadedManifest && options.verbose) {
-      if (loadedManifest.storyHash !== contentHash) {
-        printInfo("Story file changed, cache may be partially invalidated");
-      }
-      if (loadedManifest.configHash !== configHash) {
-        printInfo("Configuration changed, cache may be partially invalidated");
-      }
-    }
-  }
+	if (
+		options.force ||
+		!loadedManifest ||
+		loadedManifest.storyHash !== contentHash ||
+		loadedManifest.configHash !== configHash
+	) {
+		if (loadedManifest && options.verbose) {
+			if (loadedManifest.storyHash !== contentHash) {
+				printInfo("Story file changed, cache may be partially invalidated");
+			}
+			if (loadedManifest.configHash !== configHash) {
+				printInfo("Configuration changed, cache may be partially invalidated");
+			}
+		}
+	}
 
-  // Manifest is always non-null after this point
-  // Use contentHash as storyHash in manifest for content change detection
-  let manifest =
-    loadedManifest ?? createEmptyManifest(storyPath, contentHash, configHash);
+	// Manifest is always non-null after this point
+	// Use contentHash as storyHash in manifest for content change detection
+	let manifest =
+		loadedManifest ?? createEmptyManifest(storyPath, contentHash, configHash);
 
-  // Try to recover cached segments from existing audio files if manifest is empty or incomplete
-  if (!options.force && manifest.segments.length < segmentsToProcess.length) {
-    const recovered = await recoverCachedSegments(
-      outputDir,
-      segmentsToProcess,
-      config,
-      folderHash,
-    );
+	// Try to recover cached segments from existing audio files if manifest is empty or incomplete
+	if (!options.force && manifest.segments.length < segmentsToProcess.length) {
+		const recovered = await recoverCachedSegments(
+			outputDir,
+			segmentsToProcess,
+			config,
+			folderHash,
+		);
 
-    if (recovered.length > 0) {
-      // Merge recovered segments into manifest, counting only newly added ones
-      let newlyRecoveredCount = 0;
-      for (const recoveredSegment of recovered) {
-        // Only add if not already in manifest
-        if (
-          !manifest.segments.find(
-            (s) => s.segmentId === recoveredSegment.segmentId,
-          )
-        ) {
-          manifest.segments.push(recoveredSegment);
-          newlyRecoveredCount++;
-        }
-      }
+		if (recovered.length > 0) {
+			// Merge recovered segments into manifest, counting only newly added ones
+			let newlyRecoveredCount = 0;
+			for (const recoveredSegment of recovered) {
+				// Only add if not already in manifest
+				if (
+					!manifest.segments.find(
+						(s) => s.segmentId === recoveredSegment.segmentId,
+					)
+				) {
+					manifest.segments.push(recoveredSegment);
+					newlyRecoveredCount++;
+				}
+			}
 
-      if (newlyRecoveredCount > 0) {
-        // Sort by index
-        manifest.segments.sort((a, b) => a.index - b.index);
+			if (newlyRecoveredCount > 0) {
+				// Sort by index
+				manifest.segments.sort((a, b) => a.index - b.index);
 
-        printInfo(
-          `Recovered ${newlyRecoveredCount} cached segments from existing audio files`,
-        );
+				printInfo(
+					`Recovered ${newlyRecoveredCount} cached segments from existing audio files`,
+				);
 
-        // Save the updated manifest with recovered segments
-        await saveCacheManifest(outputDir, manifest, folderHash);
-      }
-    }
-  }
+				// Save the updated manifest with recovered segments
+				await saveCacheManifest(outputDir, manifest, folderHash);
+			}
+		}
+	}
 
-  // Determine which segments need generation
-  if (options.force) {
-    printInfo("Force flag enabled - regenerating all segments");
-  }
+	// Determine which segments need generation
+	if (options.force) {
+		printInfo("Force flag enabled - regenerating all segments");
+	}
 
-  // Update manifest hashes if they changed (content or config)
-  if (
-    manifest.storyHash !== contentHash ||
-    manifest.configHash !== configHash
-  ) {
-    manifest = { ...manifest, storyHash: contentHash, configHash };
-  }
+	// Update manifest hashes if they changed (content or config)
+	if (
+		manifest.storyHash !== contentHash ||
+		manifest.configHash !== configHash
+	) {
+		manifest = { ...manifest, storyHash: contentHash, configHash };
+	}
 
-  let segmentsToGenerate = options.force
-    ? segmentsToProcess
-    : getSegmentsToGenerate(manifest, segmentsToProcess, config);
+	let segmentsToGenerate = options.force
+		? segmentsToProcess
+		: getSegmentsToGenerate(manifest, segmentsToProcess, config);
 
-  let cachedSegmentsInfo = options.force
-    ? []
-    : getCachedSegments(manifest, segmentsToProcess, config);
+	let cachedSegmentsInfo = options.force
+		? []
+		: getCachedSegments(manifest, segmentsToProcess, config);
 
-  // Verify cached files actually exist - move any with missing files to generation queue
-  if (cachedSegmentsInfo.length > 0) {
-    const verifiedCached: typeof cachedSegmentsInfo = [];
-    const missingFiles: typeof cachedSegmentsInfo = [];
+	// Verify cached files actually exist - move any with missing files to generation queue
+	if (cachedSegmentsInfo.length > 0) {
+		const verifiedCached: typeof cachedSegmentsInfo = [];
+		const missingFiles: typeof cachedSegmentsInfo = [];
 
-    for (const info of cachedSegmentsInfo) {
-      const exists = await verifyCachedSegment(
-        outputDir,
-        info.cached,
-        folderHash,
-      );
-      if (exists) {
-        verifiedCached.push(info);
-      } else {
-        missingFiles.push(info);
-      }
-    }
+		for (const info of cachedSegmentsInfo) {
+			const exists = await verifyCachedSegment(
+				outputDir,
+				info.cached,
+				folderHash,
+			);
+			if (exists) {
+				verifiedCached.push(info);
+			} else {
+				missingFiles.push(info);
+			}
+		}
 
-    if (missingFiles.length > 0) {
-      printWarning(
-        `Found ${missingFiles.length} cached segment(s) with missing audio files - will regenerate`,
-      );
-      // Add segments with missing files to the generation queue
-      segmentsToGenerate = [
-        ...segmentsToGenerate,
-        ...missingFiles.map((m) => m.segment),
-      ];
-      // Sort by index to maintain order
-      segmentsToGenerate.sort((a, b) => a.index - b.index);
-      cachedSegmentsInfo = verifiedCached;
-    }
-  }
+		if (missingFiles.length > 0) {
+			printWarning(
+				`Found ${missingFiles.length} cached segment(s) with missing audio files - will regenerate`,
+			);
+			// Add segments with missing files to the generation queue
+			segmentsToGenerate = [
+				...segmentsToGenerate,
+				...missingFiles.map((m) => m.segment),
+			];
+			// Sort by index to maintain order
+			segmentsToGenerate.sort((a, b) => a.index - b.index);
+			cachedSegmentsInfo = verifiedCached;
+		}
+	}
 
-  if (options.verbose) {
-    printInfo(
-      `Force: ${options.force}, Segments to generate: ${segmentsToGenerate.length}, Cached: ${cachedSegmentsInfo.length}`,
-    );
-  }
+	if (options.verbose) {
+		printInfo(
+			`Force: ${options.force}, Segments to generate: ${segmentsToGenerate.length}, Cached: ${cachedSegmentsInfo.length}`,
+		);
+	}
 
-  if (options.verbose) {
-    console.log(getCacheSummary(manifest, segmentsToProcess.length));
-    printInfo(
-      `Segments to generate: ${segmentsToGenerate.length}, from cache: ${cachedSegmentsInfo.length}`,
-    );
-  }
+	if (options.verbose) {
+		console.log(getCacheSummary(manifest, segmentsToProcess.length));
+		printInfo(
+			`Segments to generate: ${segmentsToGenerate.length}, from cache: ${cachedSegmentsInfo.length}`,
+		);
+	}
 
-  // Dry run - just show what would be done
-  if (options.dryRun) {
-    console.log(`\n${chalk.cyan("=== Dry Run ===")}`);
-    console.log(`Would generate ${segmentsToGenerate.length} segments`);
-    console.log(`Would use ${cachedSegmentsInfo.length} cached segments`);
-    console.log(
-      `Estimated audio duration: ${formatDuration(estimateAudioDuration(story.totalCharacters))}`,
-    );
-    console.log(
-      `Estimated cost: $${estimateCost(story.totalCharacters).toFixed(4)}`,
-    );
+	// Dry run - just show what would be done
+	if (options.dryRun) {
+		console.log(`\n${chalk.cyan("=== Dry Run ===")}`);
+		console.log(`Would generate ${segmentsToGenerate.length} segments`);
+		console.log(`Would use ${cachedSegmentsInfo.length} cached segments`);
+		console.log(
+			`Estimated audio duration: ${formatDuration(estimateAudioDuration(story.totalCharacters))}`,
+		);
+		console.log(
+			`Estimated cost: $${estimateCost(story.totalCharacters).toFixed(4)}`,
+		);
 
-    return {
-      outputPath: "",
-      manifestPath: "",
-      stats: {
-        totalSegments: segmentsToProcess.length,
-        generatedSegments: 0,
-        cachedSegments: cachedSegmentsInfo.length,
-        failedSegments: 0,
-        totalTimeMs: 0,
-        totalAudioDurationMs: 0,
-      },
-      segmentResults: [],
-      success: true,
-      errors: [],
-    };
-  }
+		return {
+			outputPath: "",
+			manifestPath: "",
+			stats: {
+				totalSegments: segmentsToProcess.length,
+				generatedSegments: 0,
+				cachedSegments: cachedSegmentsInfo.length,
+				failedSegments: 0,
+				totalTimeMs: 0,
+				totalAudioDurationMs: 0,
+			},
+			segmentResults: [],
+			success: true,
+			errors: [],
+		};
+	}
 
-  // Initialize TTS provider
-  spinner.start("Initializing TTS provider...");
-  let provider: TTSProvider;
-  try {
-    provider = createTTSProvider(config);
-    await provider.initialize();
-  } catch (error) {
-    spinner.fail("Failed to initialize TTS provider");
-    throw error;
-  }
-  spinner.succeed(
-    `TTS provider initialized: ${config.provider.name} (${config.provider.model})`,
-  );
+	// Initialize TTS provider
+	spinner.start("Initializing TTS provider...");
+	let provider: TTSProvider;
+	try {
+		provider = createTTSProvider(config);
+		await provider.initialize();
+	} catch (error) {
+		spinner.fail("Failed to initialize TTS provider");
+		throw error;
+	}
+	spinner.succeed(
+		`TTS provider initialized: ${config.provider.name} (${config.provider.model})`,
+	);
 
-  // Generate segments with progress bar
-  const segmentResults: SegmentGenerationResult[] = [];
-  // biome-ignore lint/correctness/noUnusedVariables: Used for tracking progress
-  let totalAudioDurationMs = 0;
+	// Generate segments with progress bar
+	const segmentResults: SegmentGenerationResult[] = [];
+	// biome-ignore lint/correctness/noUnusedVariables: Used for tracking progress
+	let totalAudioDurationMs = 0;
 
-  // Log segment generation summary
-  const totalSegments = segmentsToProcess.length;
-  const cachedCount = cachedSegmentsInfo.length;
-  const toGenerateCount = segmentsToGenerate.length;
+	// Log segment generation summary
+	const totalSegments = segmentsToProcess.length;
+	const cachedCount = cachedSegmentsInfo.length;
+	const toGenerateCount = segmentsToGenerate.length;
 
-  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+	const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
 
-  console.log(`\n${chalk.cyan("Segment summary:")}`);
-  console.log(
-    `  Total: ${totalSegments} | Cached: ${chalk.green(cachedCount)} | To generate: ${chalk.yellow(toGenerateCount)} | Concurrency: ${chalk.cyan(concurrency)}`,
-  );
+	console.log(`\n${chalk.cyan("Segment summary:")}`);
+	console.log(
+		`  Total: ${totalSegments} | Cached: ${chalk.green(cachedCount)} | To generate: ${chalk.yellow(toGenerateCount)} | Concurrency: ${chalk.cyan(concurrency)}`,
+	);
 
-  if (segmentsToGenerate.length > 0) {
-    console.log(`\n${chalk.cyan("Generating audio segments...")}`);
+	if (segmentsToGenerate.length > 0) {
+		console.log(`\n${chalk.cyan("Generating audio segments...")}`);
 
-    // Track completed count for periodic manifest saves
-    let completedSinceLastSave = 0;
+		// Track completed count for periodic manifest saves
+		let completedSinceLastSave = 0;
 
-    // Process segments in parallel with concurrency limit
-    const processResults = await processWithConcurrency(
-      segmentsToGenerate,
-      async (segment: Segment, _index: number) => {
-        const segmentStartTime = Date.now();
+		// Process segments in parallel with concurrency limit
+		const processResults = await processWithConcurrency(
+			segmentsToGenerate,
+			async (segment: Segment, _index: number) => {
+				const segmentStartTime = Date.now();
 
-        const outputPath = getCachedSegmentPath(
-          outputDir,
-          segment.id,
-          config.audio.format,
-          folderHash,
-        );
+				const outputPath = getCachedSegmentPath(
+					outputDir,
+					segment.id,
+					config.audio.format,
+					folderHash,
+				);
 
-        const response = await generateSegmentAudio(
-          provider,
-          segment,
-          config,
-          outputPath,
-        );
+				const response = await generateSegmentAudio(
+					provider,
+					segment,
+					config,
+					outputPath,
+				);
 
-        if (!response.success || !response.audioPath) {
-          throw new Error(response.error || "Unknown generation error");
-        }
+				if (!response.success || !response.audioPath) {
+					throw new Error(response.error || "Unknown generation error");
+				}
 
-        return {
-          segment,
-          response,
-          timeTakenMs: Date.now() - segmentStartTime,
-        };
-      },
-      {
-        concurrency,
-        stopOnError: true,
-        onProgress: async (completed, total, result) => {
-          if (result.success && result.result) {
-            const { segment, response, timeTakenMs } = result.result;
+				return {
+					segment,
+					response,
+					timeTakenMs: Date.now() - segmentStartTime,
+				};
+			},
+			{
+				concurrency,
+				stopOnError: true,
+				onProgress: async (completed, total, result) => {
+					if (result.success && result.result) {
+						const { segment, response, timeTakenMs } = result.result;
 
-            // Update cache manifest (will be saved periodically)
-            manifest = updateCachedSegment(manifest, segment, config, {
-              // biome-ignore lint/style/noNonNullAssertion: audioPath is guaranteed when response succeeds
-              audioPath: response.audioPath!,
-              durationMs: response.durationMs || 0,
-              fileSize: response.fileSize || 0,
-              success: true,
-            });
+						// Update cache manifest (will be saved periodically)
+						manifest = updateCachedSegment(manifest, segment, config, {
+							// biome-ignore lint/style/noNonNullAssertion: audioPath is guaranteed when response succeeds
+							audioPath: response.audioPath!,
+							durationMs: response.durationMs || 0,
+							fileSize: response.fileSize || 0,
+							success: true,
+						});
 
-            totalAudioDurationMs += response.durationMs || 0;
+						totalAudioDurationMs += response.durationMs || 0;
 
-            segmentResults.push({
-              segment,
-              success: true,
-              audioPath: response.audioPath,
-              durationMs: response.durationMs,
-              fileSize: response.fileSize,
-              fromCache: false,
-              timeTakenMs,
-            });
+						segmentResults.push({
+							segment,
+							success: true,
+							audioPath: response.audioPath,
+							durationMs: response.durationMs,
+							fileSize: response.fileSize,
+							fromCache: false,
+							timeTakenMs,
+						});
 
-            // Log progress - show audio duration
-            console.log(
-              chalk.gray(
-                `  [${completed}/${total}] ${segment.id} - ${formatDuration(response.durationMs || 0)} audio`,
-              ),
-            );
+						// Log progress - show audio duration
+						console.log(
+							chalk.gray(
+								`  [${completed}/${total}] ${segment.id} - ${formatDuration(response.durationMs || 0)} audio`,
+							),
+						);
 
-            // Save manifest periodically (every 10 completions)
-            completedSinceLastSave++;
-            if (completedSinceLastSave >= 10) {
-              completedSinceLastSave = 0;
-              await saveCacheManifest(outputDir, manifest, folderHash);
-            }
-          }
-        },
-      },
-    );
+						// Save manifest periodically (every 10 completions)
+						completedSinceLastSave++;
+						if (completedSinceLastSave >= 10) {
+							completedSinceLastSave = 0;
+							await saveCacheManifest(outputDir, manifest, folderHash);
+						}
+					}
+				},
+			},
+		);
 
-    // Save manifest after all parallel processing completes
-    // This captures all successful segments, even if some failed
-    await saveCacheManifest(outputDir, manifest, folderHash);
+		// Save manifest after all parallel processing completes
+		// This captures all successful segments, even if some failed
+		await saveCacheManifest(outputDir, manifest, folderHash);
 
-    // Check for any failures
-    const failures = processResults.filter((r) => !r.success);
-    if (failures.length > 0) {
-      const firstFailure = failures[0];
-      const segment = firstFailure.item;
-      const successCount = processResults.filter((r) => r.success).length;
+		// Check for any failures
+		const failures = processResults.filter((r) => !r.success);
+		if (failures.length > 0) {
+			const firstFailure = failures[0];
+			const segment = firstFailure.item;
+			const successCount = processResults.filter((r) => r.success).length;
 
-      console.log(
-        chalk.red(
-          `\n✖ Generation failed after ${successCount}/${toGenerateCount} segments`,
-        ),
-      );
-      console.log(chalk.red(`  Failed segment: ${segment.id}`));
-      console.log(chalk.red(`  Error: ${firstFailure.error}`));
+			console.log(
+				chalk.red(
+					`\n✖ Generation failed after ${successCount}/${toGenerateCount} segments`,
+				),
+			);
+			console.log(chalk.red(`  Failed segment: ${segment.id}`));
+			console.log(chalk.red(`  Error: ${firstFailure.error}`));
 
-      exitWithError(
-        `Failed to generate segment ${segment.id}:\n${firstFailure.error}`,
-      );
-    }
-  }
+			exitWithError(
+				`Failed to generate segment ${segment.id}:\n${firstFailure.error}`,
+			);
+		}
+	}
 
-  // Add cached segments to results (already verified earlier)
-  for (const { segment, cached } of cachedSegmentsInfo) {
-    segmentResults.push({
-      segment,
-      success: true,
-      audioPath: cached.audioPath,
-      durationMs: cached.durationMs,
-      fileSize: cached.fileSize,
-      fromCache: true,
-      timeTakenMs: 0,
-    });
-    totalAudioDurationMs += cached.durationMs;
-  }
+	// Add cached segments to results (already verified earlier)
+	for (const { segment, cached } of cachedSegmentsInfo) {
+		segmentResults.push({
+			segment,
+			success: true,
+			audioPath: cached.audioPath,
+			durationMs: cached.durationMs,
+			fileSize: cached.fileSize,
+			fromCache: true,
+			timeTakenMs: 0,
+		});
+		totalAudioDurationMs += cached.durationMs;
+	}
 
-  // Save final manifest
-  await saveCacheManifest(outputDir, manifest, folderHash);
+	// Save final manifest
+	await saveCacheManifest(outputDir, manifest, folderHash);
 
-  // Sort results by segment index
-  segmentResults.sort((a, b) => a.segment.index - b.segment.index);
+	// Sort results by segment index
+	segmentResults.sort((a, b) => a.segment.index - b.segment.index);
 
-  // All segments should have succeeded at this point (we exit on failure)
-  const successfulResults = segmentResults.filter((r) => r.success);
+	// All segments should have succeeded at this point (we exit on failure)
+	const successfulResults = segmentResults.filter((r) => r.success);
 
-  if (successfulResults.length === 0) {
-    exitWithError("No segments were successfully generated");
-  }
+	if (successfulResults.length === 0) {
+		exitWithError("No segments were successfully generated");
+	}
 
-  // Stitch audio files together
-  spinner.start("Stitching audio files...");
+	// Stitch audio files together
+	spinner.start("Stitching audio files...");
 
-  const timestampSuffix = options.timestamp ? `_${options.timestamp}` : "";
-  const outputFileName = `${basename(storyPath, extname(storyPath))}${timestampSuffix}_audiobook.wav`;
-  const outputPath = join(outputDir, outputFileName);
+	const timestampSuffix = options.timestamp ? `_${options.timestamp}` : "";
+	const outputFileName = `${basename(storyPath, extname(storyPath))}${timestampSuffix}_audiobook.wav`;
+	const outputPath = join(outputDir, outputFileName);
 
-  const audioFiles: AudioFileInfo[] = successfulResults.map((r) => ({
-    // biome-ignore lint/style/noNonNullAssertion: audioPath is guaranteed for successful results
-    path: r.audioPath!,
-    index: r.segment.index,
-    speaker: r.segment.speaker,
-    text: r.segment.text,
-    durationMs: r.durationMs,
-  }));
+	const audioFiles: AudioFileInfo[] = successfulResults.map((r) => ({
+		// biome-ignore lint/style/noNonNullAssertion: audioPath is guaranteed for successful results
+		path: r.audioPath!,
+		index: r.segment.index,
+		speaker: r.segment.speaker,
+		text: r.segment.text,
+		durationMs: r.durationMs,
+	}));
 
-  try {
-    const stitchResult = await stitchAudioFiles(audioFiles, outputPath, {
-      silencePaddingMs: config.audio.silencePadding,
-      sampleRate: config.audio.sampleRate,
-      bitsPerSample: config.audio.bitDepth,
-      title: basename(storyPath, extname(storyPath)),
-      sourceFile: storyPath,
-    });
+	try {
+		const stitchResult = await stitchAudioFiles(audioFiles, outputPath, {
+			silencePaddingMs: config.audio.silencePadding,
+			sampleRate: config.audio.sampleRate,
+			bitsPerSample: config.audio.bitDepth,
+			title: basename(storyPath, extname(storyPath)),
+			sourceFile: storyPath,
+		});
 
-    // Save manifest
-    const manifestPath = join(
-      outputDir,
-      `${basename(storyPath, extname(storyPath))}${timestampSuffix}_manifest.json`,
-    );
-    await saveManifest(stitchResult.manifest, manifestPath);
+		// Save manifest
+		const manifestPath = join(
+			outputDir,
+			`${basename(storyPath, extname(storyPath))}${timestampSuffix}_manifest.json`,
+		);
+		await saveManifest(stitchResult.manifest, manifestPath);
 
-    spinner.succeed("Audio files stitched successfully");
+		spinner.succeed("Audio files stitched successfully");
 
-    // Print summary
-    console.log(`\n${getStitchSummary(stitchResult)}`);
+		// Print summary
+		console.log(`\n${getStitchSummary(stitchResult)}`);
 
-    const totalTimeMs = Date.now() - startTime;
+		const totalTimeMs = Date.now() - startTime;
 
-    return {
-      outputPath: stitchResult.outputPath,
-      manifestPath,
-      stats: {
-        totalSegments: segmentsToProcess.length,
-        generatedSegments: segmentsToGenerate.length,
-        cachedSegments: cachedSegmentsInfo.length,
-        failedSegments: 0, // We exit immediately on failure, so this is always 0
-        totalTimeMs,
-        totalAudioDurationMs: stitchResult.totalDurationMs,
-      },
-      segmentResults,
-      success: true, // We exit immediately on failure, so this is always true
-      errors,
-    };
-  } catch (error) {
-    spinner.fail("Failed to stitch audio files");
-    throw error;
-  }
+		return {
+			outputPath: stitchResult.outputPath,
+			manifestPath,
+			stats: {
+				totalSegments: segmentsToProcess.length,
+				generatedSegments: segmentsToGenerate.length,
+				cachedSegments: cachedSegmentsInfo.length,
+				failedSegments: 0, // We exit immediately on failure, so this is always 0
+				totalTimeMs,
+				totalAudioDurationMs: stitchResult.totalDurationMs,
+			},
+			segmentResults,
+			success: true, // We exit immediately on failure, so this is always true
+			errors,
+		};
+	} catch (error) {
+		spinner.fail("Failed to stitch audio files");
+		throw error;
+	}
 }
 
 // ============================================================================
@@ -646,857 +646,857 @@ async function generateAudiobook(
 const program = new Command();
 
 program
-  .name("audiobook")
-  .description("Generate audiobooks from story scripts using TTS")
-  .version("1.0.0");
+	.name("audiobook")
+	.description("Generate audiobooks from story scripts using TTS")
+	.version("1.0.0");
 
 /**
  * Setup command - initialize project with config
  */
 program
-  .command("setup")
-  .description("Initialize project with configuration file")
-  .option("-o, --output <path>", "Output directory", getDefaultOutputDir())
-  .option("-f, --force", "Overwrite existing config", false)
-  .action(async (options) => {
-    const configPath = getDefaultConfigPath();
+	.command("setup")
+	.description("Initialize project with configuration file")
+	.option("-o, --output <path>", "Output directory", getDefaultOutputDir())
+	.option("-f, --force", "Overwrite existing config", false)
+	.action(async (options) => {
+		const configPath = getDefaultConfigPath();
 
-    if ((await fileExists(configPath)) && !options.force) {
-      exitWithError(
-        `Config file already exists: ${configPath}\nUse --force to overwrite`,
-      );
-    }
+		if ((await fileExists(configPath)) && !options.force) {
+			exitWithError(
+				`Config file already exists: ${configPath}\nUse --force to overwrite`,
+			);
+		}
 
-    const config = { ...DEFAULT_CONFIG };
-    await saveConfig(configPath, config);
-    printSuccess(`Created config file: ${configPath}`);
+		const config = { ...DEFAULT_CONFIG };
+		await saveConfig(configPath, config);
+		printSuccess(`Created config file: ${configPath}`);
 
-    // Create output directory
-    await mkdir(options.output, { recursive: true });
-    printSuccess(`Created output directory: ${options.output}`);
+		// Create output directory
+		await mkdir(options.output, { recursive: true });
+		printSuccess(`Created output directory: ${options.output}`);
 
-    console.log("\nNext steps:");
-    console.log("1. Edit config.json to configure voices");
-    console.log("2. Set GEMINI_API_KEY environment variable");
-    console.log("3. Run: npm run generate <story.txt>");
-  });
+		console.log("\nNext steps:");
+		console.log("1. Edit config.json to configure voices");
+		console.log("2. Set GEMINI_API_KEY environment variable");
+		console.log("3. Run: npm run generate <story.txt>");
+	});
 
 /**
  * Init command - create config from story file
  */
 program
-  .command("init <storyFile>")
-  .description("Create config file based on speakers in story")
-  .option("-o, --output <path>", "Config output path", getDefaultConfigPath())
-  .option("-f, --force", "Overwrite existing config", false)
-  .action(async (storyFile: string, options) => {
-    if ((await fileExists(options.output)) && !options.force) {
-      exitWithError(
-        `Config file already exists: ${options.output}\nUse --force to overwrite`,
-      );
-    }
+	.command("init <storyFile>")
+	.description("Create config file based on speakers in story")
+	.option("-o, --output <path>", "Config output path", getDefaultConfigPath())
+	.option("-f, --force", "Overwrite existing config", false)
+	.action(async (storyFile: string, options) => {
+		if ((await fileExists(options.output)) && !options.force) {
+			exitWithError(
+				`Config file already exists: ${options.output}\nUse --force to overwrite`,
+			);
+		}
 
-    const spinner = ora("Parsing story file...").start();
-    try {
-      const story = await parseFile(storyFile);
-      spinner.succeed(
-        `Found ${story.speakers.length} speakers: ${story.speakers.join(", ")}`,
-      );
+		const spinner = ora("Parsing story file...").start();
+		try {
+			const story = await parseFile(storyFile);
+			spinner.succeed(
+				`Found ${story.speakers.length} speakers: ${story.speakers.join(", ")}`,
+			);
 
-      const config = createConfigForSpeakers(story.speakers);
-      await saveConfig(options.output, config);
-      printSuccess(`Created config file: ${options.output}`);
+			const config = createConfigForSpeakers(story.speakers);
+			await saveConfig(options.output, config);
+			printSuccess(`Created config file: ${options.output}`);
 
-      console.log("\nVoice assignments:");
-      for (const voice of config.voices) {
-        console.log(
-          `  ${voice.name}: ${voice.voiceName} - "${voice.stylePrompt}"`,
-        );
-      }
+			console.log("\nVoice assignments:");
+			for (const voice of config.voices) {
+				console.log(
+					`  ${voice.name}: ${voice.voiceName} - "${voice.stylePrompt}"`,
+				);
+			}
 
-      console.log("\nEdit the config file to customize voices, then run:");
-      console.log(`  npm run generate ${storyFile}`);
-    } catch (error) {
-      spinner.fail("Failed to parse story file");
-      throw error;
-    }
-  });
+			console.log("\nEdit the config file to customize voices, then run:");
+			console.log(`  npm run generate ${storyFile}`);
+		} catch (error) {
+			spinner.fail("Failed to parse story file");
+			throw error;
+		}
+	});
 
 /**
  * Generate command - full audiobook generation
  */
 program
-  .command("generate <storyFile>")
-  .description("Generate audiobook from story file")
-  .option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
-  .option("-o, --output <path>", "Output directory", getDefaultOutputDir())
-  .option("-f, --force", "Force regeneration (ignore cache)", false)
-  .option("-v, --verbose", "Verbose output", false)
-  .option("-d, --dry-run", "Show what would be done without generating", false)
-  .option(
-    "-p, --concurrency <number>",
-    `Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
-    (val) => parseInt(val, 10),
-  )
-  .action(async (storyFile: string, options: GenerateOptions) => {
-    // Check story file exists
-    if (!(await fileExists(storyFile))) {
-      exitWithError(`Story file not found: ${storyFile}`);
-    }
+	.command("generate <storyFile>")
+	.description("Generate audiobook from story file")
+	.option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
+	.option("-o, --output <path>", "Output directory", getDefaultOutputDir())
+	.option("-f, --force", "Force regeneration (ignore cache)", false)
+	.option("-v, --verbose", "Verbose output", false)
+	.option("-d, --dry-run", "Show what would be done without generating", false)
+	.option(
+		"-p, --concurrency <number>",
+		`Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
+		(val) => parseInt(val, 10),
+	)
+	.action(async (storyFile: string, options: GenerateOptions) => {
+		// Check story file exists
+		if (!(await fileExists(storyFile))) {
+			exitWithError(`Story file not found: ${storyFile}`);
+		}
 
-    // Load config
-    const configPath = options.config || getDefaultConfigPath();
-    let config: Config;
-    try {
-      config = await loadOrCreateConfig(configPath);
-    } catch (error) {
-      exitWithError(
-        `Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
-      );
-    }
+		// Load config
+		const configPath = options.config || getDefaultConfigPath();
+		let config: Config;
+		try {
+			config = await loadOrCreateConfig(configPath);
+		} catch (error) {
+			exitWithError(
+				`Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
+			);
+		}
 
-    if (options.verbose) {
-      console.log(`\n${getConfigSummary(config)}\n`);
-    }
+		if (options.verbose) {
+			console.log(`\n${getConfigSummary(config)}\n`);
+		}
 
-    // Generate timestamp for unique output filenames
-    const timestamp = Date.now().toString();
+		// Generate timestamp for unique output filenames
+		const timestamp = Date.now().toString();
 
-    try {
-      const result = await generateAudiobook(
-        storyFile,
-        config,
-        options.output || getDefaultOutputDir(),
-        {
-          force: options.force,
-          verbose: options.verbose,
-          dryRun: options.dryRun,
-          timestamp,
-          concurrency: options.concurrency,
-        },
-      );
+		try {
+			const result = await generateAudiobook(
+				storyFile,
+				config,
+				options.output || getDefaultOutputDir(),
+				{
+					force: options.force,
+					verbose: options.verbose,
+					dryRun: options.dryRun,
+					timestamp,
+					concurrency: options.concurrency,
+				},
+			);
 
-      if (!options.dryRun) {
-        console.log(`\n${chalk.green("✔ Audiobook generation complete!")}`);
-        console.log(
-          `\nTotal time: ${formatDuration(result.stats.totalTimeMs)}`,
-        );
+			if (!options.dryRun) {
+				console.log(`\n${chalk.green("✔ Audiobook generation complete!")}`);
+				console.log(
+					`\nTotal time: ${formatDuration(result.stats.totalTimeMs)}`,
+				);
 
-        if (result.errors.length > 0) {
-          console.log(chalk.yellow("\nWarnings:"));
-          for (const error of result.errors) {
-            console.log(chalk.yellow(`  - ${error}`));
-          }
-        }
-      }
-    } catch (error) {
-      exitWithError(
-        `Generation failed: ${error instanceof Error ? error.message : error}`,
-      );
-    }
-  });
+				if (result.errors.length > 0) {
+					console.log(chalk.yellow("\nWarnings:"));
+					for (const error of result.errors) {
+						console.log(chalk.yellow(`  - ${error}`));
+					}
+				}
+			}
+		} catch (error) {
+			exitWithError(
+				`Generation failed: ${error instanceof Error ? error.message : error}`,
+			);
+		}
+	});
 
 /**
  * Preview command - generate subset of segments
  */
 program
-  .command("preview <storyFile>")
-  .description("Generate preview of first N segments")
-  .option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
-  .option("-o, --output <path>", "Output directory", getDefaultOutputDir())
-  .option("-n, --segments <number>", "Number of segments to preview", "5")
-  .option("-s, --start <number>", "Start from segment index", "0")
-  .option("--speaker <name>", "Preview only specific speaker")
-  .option("-f, --force", "Force regeneration", false)
-  .option("-v, --verbose", "Verbose output", false)
-  .option(
-    "-p, --concurrency <number>",
-    `Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
-    (val) => parseInt(val, 10),
-  )
-  .action(async (storyFile: string, options: PreviewOptions) => {
-    if (!(await fileExists(storyFile))) {
-      exitWithError(`Story file not found: ${storyFile}`);
-    }
+	.command("preview <storyFile>")
+	.description("Generate preview of first N segments")
+	.option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
+	.option("-o, --output <path>", "Output directory", getDefaultOutputDir())
+	.option("-n, --segments <number>", "Number of segments to preview", "5")
+	.option("-s, --start <number>", "Start from segment index", "0")
+	.option("--speaker <name>", "Preview only specific speaker")
+	.option("-f, --force", "Force regeneration", false)
+	.option("-v, --verbose", "Verbose output", false)
+	.option(
+		"-p, --concurrency <number>",
+		`Number of segments to generate in parallel (default: ${DEFAULT_CONCURRENCY})`,
+		(val) => parseInt(val, 10),
+	)
+	.action(async (storyFile: string, options: PreviewOptions) => {
+		if (!(await fileExists(storyFile))) {
+			exitWithError(`Story file not found: ${storyFile}`);
+		}
 
-    const configPath = options.config || getDefaultConfigPath();
-    let config: Config;
-    try {
-      config = await loadOrCreateConfig(configPath);
-    } catch (error) {
-      exitWithError(
-        `Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
-      );
-    }
+		const configPath = options.config || getDefaultConfigPath();
+		let config: Config;
+		try {
+			config = await loadOrCreateConfig(configPath);
+		} catch (error) {
+			exitWithError(
+				`Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
+			);
+		}
 
-    const maxSegments = parseInt(String(options.segments || "5"), 10);
-    const startFrom = parseInt(String(options.startFrom || "0"), 10);
-    const speakers = options.speaker ? [options.speaker] : undefined;
+		const maxSegments = parseInt(String(options.segments || "5"), 10);
+		const startFrom = parseInt(String(options.startFrom || "0"), 10);
+		const speakers = options.speaker ? [options.speaker] : undefined;
 
-    console.log(
-      chalk.cyan(
-        `\nGenerating preview: ${maxSegments} segments starting from ${startFrom}`,
-      ),
-    );
+		console.log(
+			chalk.cyan(
+				`\nGenerating preview: ${maxSegments} segments starting from ${startFrom}`,
+			),
+		);
 
-    // Generate timestamp for unique output filenames
-    const timestamp = Date.now().toString();
+		// Generate timestamp for unique output filenames
+		const timestamp = Date.now().toString();
 
-    if (options.force) {
-      printInfo("Force flag detected in preview command");
-    }
+		if (options.force) {
+			printInfo("Force flag detected in preview command");
+		}
 
-    try {
-      await generateAudiobook(
-        storyFile,
-        config,
-        options.output || getDefaultOutputDir(),
-        {
-          force: options.force,
-          verbose: options.verbose,
-          maxSegments,
-          startFrom,
-          speakers,
-          timestamp,
-          concurrency: options.concurrency,
-        },
-      );
+		try {
+			await generateAudiobook(
+				storyFile,
+				config,
+				options.output || getDefaultOutputDir(),
+				{
+					force: options.force,
+					verbose: options.verbose,
+					maxSegments,
+					startFrom,
+					speakers,
+					timestamp,
+					concurrency: options.concurrency,
+				},
+			);
 
-      printSuccess("Preview generation complete!");
-    } catch (error) {
-      exitWithError(
-        `Preview generation failed: ${error instanceof Error ? error.message : error}`,
-      );
-    }
-  });
+			printSuccess("Preview generation complete!");
+		} catch (error) {
+			exitWithError(
+				`Preview generation failed: ${error instanceof Error ? error.message : error}`,
+			);
+		}
+	});
 
 /**
  * Update-styles command - regenerate with new style prompts
  */
 program
-  .command("update-styles")
-  .description("Regenerate segments with changed style prompts")
-  .argument("<storyFile>", "Story file path")
-  .option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
-  .option("-o, --output <path>", "Output directory", getDefaultOutputDir())
-  .option(
-    "-s, --speakers <names>",
-    "Specific speakers to update (comma-separated)",
-  )
-  .option("-f, --force", "Force update even if unchanged", false)
-  .option("-v, --verbose", "Verbose output", false)
-  .action(
-    async (
-      storyFile: string,
-      options: {
-        config?: string;
-        output?: string;
-        speakers?: string;
-        force?: boolean;
-        verbose?: boolean;
-      },
-    ) => {
-      if (!(await fileExists(storyFile))) {
-        exitWithError(`Story file not found: ${storyFile}`);
-      }
+	.command("update-styles")
+	.description("Regenerate segments with changed style prompts")
+	.argument("<storyFile>", "Story file path")
+	.option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
+	.option("-o, --output <path>", "Output directory", getDefaultOutputDir())
+	.option(
+		"-s, --speakers <names>",
+		"Specific speakers to update (comma-separated)",
+	)
+	.option("-f, --force", "Force update even if unchanged", false)
+	.option("-v, --verbose", "Verbose output", false)
+	.action(
+		async (
+			storyFile: string,
+			options: {
+				config?: string;
+				output?: string;
+				speakers?: string;
+				force?: boolean;
+				verbose?: boolean;
+			},
+		) => {
+			if (!(await fileExists(storyFile))) {
+				exitWithError(`Story file not found: ${storyFile}`);
+			}
 
-      const configPath = options.config || getDefaultConfigPath();
-      let config: Config;
-      try {
-        config = await loadConfig(configPath);
-      } catch (error) {
-        exitWithError(
-          `Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
-        );
-      }
+			const configPath = options.config || getDefaultConfigPath();
+			let config: Config;
+			try {
+				config = await loadConfig(configPath);
+			} catch (error) {
+				exitWithError(
+					`Failed to load config (${configPath}): ${error instanceof Error ? error.message : error}`,
+				);
+			}
 
-      const speakers = options.speakers
-        ? (options.speakers as unknown as string)
-            .split(",")
-            .map((s) => s.trim())
-        : undefined;
+			const speakers = options.speakers
+				? (options.speakers as unknown as string)
+						.split(",")
+						.map((s) => s.trim())
+				: undefined;
 
-      console.log(chalk.cyan("\nChecking for style changes..."));
+			console.log(chalk.cyan("\nChecking for style changes..."));
 
-      // Parse story
-      const story = await parseFile(storyFile);
-      const outputDir = options.output || getDefaultOutputDir();
+			// Parse story
+			const story = await parseFile(storyFile);
+			const outputDir = options.output || getDefaultOutputDir();
 
-      // Generate folder hash from filename (stable across content changes)
-      const storyBasename = basename(storyFile, extname(storyFile));
-      const folderHash = hashText(storyBasename);
+			// Generate folder hash from filename (stable across content changes)
+			const storyBasename = basename(storyFile, extname(storyFile));
+			const folderHash = hashText(storyBasename);
 
-      // Load cache manifest
-      const manifest = await loadCacheManifest(outputDir, folderHash);
-      if (!manifest) {
-        printInfo("No cache found. Running full generation...");
-        const timestamp = Date.now().toString();
-        await generateAudiobook(storyFile, config, outputDir, {
-          verbose: options.verbose,
-          timestamp,
-        });
-        return;
-      }
+			// Load cache manifest
+			const manifest = await loadCacheManifest(outputDir, folderHash);
+			if (!manifest) {
+				printInfo("No cache found. Running full generation...");
+				const timestamp = Date.now().toString();
+				await generateAudiobook(storyFile, config, outputDir, {
+					verbose: options.verbose,
+					timestamp,
+				});
+				return;
+			}
 
-      // Update segment IDs to incorporate stylePrompt from config
-      // so manifest lookups match the IDs used during generation
-      updateSegmentIdsWithStyle(story.segments, config);
+			// Update segment IDs to incorporate stylePrompt from config
+			// so manifest lookups match the IDs used during generation
+			updateSegmentIdsWithStyle(story.segments, config);
 
-      // Find segments with style changes
-      const changedSegments = getSegmentsWithStyleChanges(
-        manifest,
-        story.segments,
-        config,
-        speakers,
-      );
+			// Find segments with style changes
+			const changedSegments = getSegmentsWithStyleChanges(
+				manifest,
+				story.segments,
+				config,
+				speakers,
+			);
 
-      if (changedSegments.length === 0 && !options.force) {
-        printSuccess("No style changes detected. Nothing to update.");
-        return;
-      }
+			if (changedSegments.length === 0 && !options.force) {
+				printSuccess("No style changes detected. Nothing to update.");
+				return;
+			}
 
-      console.log(
-        `Found ${changedSegments.length} segments to update${speakers ? ` for speakers: ${speakers.join(", ")}` : ""}`,
-      );
+			console.log(
+				`Found ${changedSegments.length} segments to update${speakers ? ` for speakers: ${speakers.join(", ")}` : ""}`,
+			);
 
-      // Regenerate changed segments
-      const timestamp = Date.now().toString();
-      await generateAudiobook(storyFile, config, outputDir, {
-        force: true, // Force regeneration of all segments
-        verbose: options.verbose,
-        timestamp,
-      });
+			// Regenerate changed segments
+			const timestamp = Date.now().toString();
+			await generateAudiobook(storyFile, config, outputDir, {
+				force: true, // Force regeneration of all segments
+				verbose: options.verbose,
+				timestamp,
+			});
 
-      printSuccess("Style update complete!");
-    },
-  );
+			printSuccess("Style update complete!");
+		},
+	);
 
 /**
  * Clean command - clear cache and output files
  */
 program
-  .command("clean")
-  .description("Clear cache and generated files")
-  .option("-o, --output <path>", "Output directory", getDefaultOutputDir())
-  .option("--cache-only", "Only clear cache, keep generated audiobooks", false)
-  .option("--output-only", "Only clear output files, keep cache", false)
-  .option("-f, --force", "Don't ask for confirmation", false)
-  .action(
-    async (options: {
-      output?: string;
-      cacheOnly?: boolean;
-      outputOnly?: boolean;
-      force?: boolean;
-    }) => {
-      const outputDir = options.output || getDefaultOutputDir();
+	.command("clean")
+	.description("Clear cache and generated files")
+	.option("-o, --output <path>", "Output directory", getDefaultOutputDir())
+	.option("--cache-only", "Only clear cache, keep generated audiobooks", false)
+	.option("--output-only", "Only clear output files, keep cache", false)
+	.option("-f, --force", "Don't ask for confirmation", false)
+	.action(
+		async (options: {
+			output?: string;
+			cacheOnly?: boolean;
+			outputOnly?: boolean;
+			force?: boolean;
+		}) => {
+			const outputDir = options.output || getDefaultOutputDir();
 
-      if (!(await fileExists(outputDir))) {
-        printInfo("Output directory does not exist. Nothing to clean.");
-        return;
-      }
+			if (!(await fileExists(outputDir))) {
+				printInfo("Output directory does not exist. Nothing to clean.");
+				return;
+			}
 
-      if (!options.force) {
-        console.log(chalk.yellow("\nThis will delete:"));
-        if (!options.outputOnly) {
-          console.log("  - Cache directory and all cached segments");
-        }
-        if (!options.cacheOnly) {
-          console.log("  - Generated audiobook files");
-          console.log("  - Manifest files");
-        }
-        console.log("\nUse --force to skip this confirmation.");
-        return;
-      }
+			if (!options.force) {
+				console.log(chalk.yellow("\nThis will delete:"));
+				if (!options.outputOnly) {
+					console.log("  - Cache directory and all cached segments");
+				}
+				if (!options.cacheOnly) {
+					console.log("  - Generated audiobook files");
+					console.log("  - Manifest files");
+				}
+				console.log("\nUse --force to skip this confirmation.");
+				return;
+			}
 
-      const spinner = ora("Cleaning...").start();
+			const spinner = ora("Cleaning...").start();
 
-      try {
-        if (!options.outputOnly) {
-          // Clear cache
-          await clearCache(outputDir);
-          spinner.text = "Cleared cache...";
-        }
+			try {
+				if (!options.outputOnly) {
+					// Clear cache
+					await clearCache(outputDir);
+					spinner.text = "Cleared cache...";
+				}
 
-        if (!options.cacheOnly) {
-          // Clear output files (WAV and JSON files in output dir)
-          const files = await readdir(outputDir);
-          for (const file of files) {
-            if (file.endsWith(".wav") || file.endsWith("_manifest.json")) {
-              await unlink(join(outputDir, file));
-            }
-          }
-        }
+				if (!options.cacheOnly) {
+					// Clear output files (WAV and JSON files in output dir)
+					const files = await readdir(outputDir);
+					for (const file of files) {
+						if (file.endsWith(".wav") || file.endsWith("_manifest.json")) {
+							await unlink(join(outputDir, file));
+						}
+					}
+				}
 
-        spinner.succeed("Clean complete!");
-      } catch (error) {
-        spinner.fail("Clean failed");
-        throw error;
-      }
-    },
-  );
+				spinner.succeed("Clean complete!");
+			} catch (error) {
+				spinner.fail("Clean failed");
+				throw error;
+			}
+		},
+	);
 
 /**
  * Info command - show project information
  */
 program
-  .command("info")
-  .description("Show project and cache information")
-  .argument("[storyFile]", "Story file path (optional)")
-  .option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
-  .option("-o, --output <path>", "Output directory", getDefaultOutputDir())
-  .action(async (storyFile: string | undefined, options) => {
-    // Show config info
-    console.log(chalk.cyan("\n=== Configuration ==="));
-    if (await fileExists(options.config)) {
-      try {
-        const config = await loadConfig(options.config);
-        console.log(getConfigSummary(config));
-      } catch (error) {
-        console.log(
-          chalk.red(`Failed to load config (${options.config}): ${error}`),
-        );
-      }
-    } else {
-      console.log("No config file found. Run 'setup' or 'init' to create one.");
-    }
+	.command("info")
+	.description("Show project and cache information")
+	.argument("[storyFile]", "Story file path (optional)")
+	.option("-c, --config <path>", "Path to config file", getDefaultConfigPath())
+	.option("-o, --output <path>", "Output directory", getDefaultOutputDir())
+	.action(async (storyFile: string | undefined, options) => {
+		// Show config info
+		console.log(chalk.cyan("\n=== Configuration ==="));
+		if (await fileExists(options.config)) {
+			try {
+				const config = await loadConfig(options.config);
+				console.log(getConfigSummary(config));
+			} catch (error) {
+				console.log(
+					chalk.red(`Failed to load config (${options.config}): ${error}`),
+				);
+			}
+		} else {
+			console.log("No config file found. Run 'setup' or 'init' to create one.");
+		}
 
-    // Show story info if provided
-    if (storyFile) {
-      console.log(chalk.cyan("\n=== Story ==="));
-      if (await fileExists(storyFile)) {
-        const story = await parseFile(storyFile);
-        console.log(getStorySummary(story));
+		// Show story info if provided
+		if (storyFile) {
+			console.log(chalk.cyan("\n=== Story ==="));
+			if (await fileExists(storyFile)) {
+				const story = await parseFile(storyFile);
+				console.log(getStorySummary(story));
 
-        const validation = validateParsedStory(story);
-        if (validation.warnings.length > 0) {
-          console.log(chalk.yellow("\nWarnings:"));
-          for (const warning of validation.warnings) {
-            console.log(chalk.yellow(`  - ${warning}`));
-          }
-        }
-      } else {
-        console.log(`Story file not found: ${storyFile}`);
-      }
-    }
+				const validation = validateParsedStory(story);
+				if (validation.warnings.length > 0) {
+					console.log(chalk.yellow("\nWarnings:"));
+					for (const warning of validation.warnings) {
+						console.log(chalk.yellow(`  - ${warning}`));
+					}
+				}
+			} else {
+				console.log(`Story file not found: ${storyFile}`);
+			}
+		}
 
-    // Show cache info
-    console.log(chalk.cyan("\n=== Cache ==="));
-    const outputDir = options.output || getDefaultOutputDir();
+		// Show cache info
+		console.log(chalk.cyan("\n=== Cache ==="));
+		const outputDir = options.output || getDefaultOutputDir();
 
-    // If story file provided, use story-specific cache (filename-based folder hash)
-    let folderHash: string | undefined;
-    if (storyFile && (await fileExists(storyFile))) {
-      const storyBasename = basename(storyFile, extname(storyFile));
-      folderHash = hashText(storyBasename);
-      console.log(
-        `Cache folder: ${folderHash.substring(0, 8)} (${storyBasename})`,
-      );
-    }
+		// If story file provided, use story-specific cache (filename-based folder hash)
+		let folderHash: string | undefined;
+		if (storyFile && (await fileExists(storyFile))) {
+			const storyBasename = basename(storyFile, extname(storyFile));
+			folderHash = hashText(storyBasename);
+			console.log(
+				`Cache folder: ${folderHash.substring(0, 8)} (${storyBasename})`,
+			);
+		}
 
-    const manifest = await loadCacheManifest(outputDir, folderHash);
-    if (manifest) {
-      const stats = getCacheStats(manifest);
-      console.log(`Cached segments: ${stats.cachedCount}`);
-      console.log(
-        `Total cached duration: ${formatDuration(stats.totalDurationMs)}`,
-      );
-      console.log(`Cache size: ${formatFileSize(stats.totalSizeBytes)}`);
-      if (stats.newestEntry) {
-        console.log(`Last updated: ${stats.newestEntry}`);
-      }
-    } else {
-      console.log("No cache found.");
-    }
-  });
+		const manifest = await loadCacheManifest(outputDir, folderHash);
+		if (manifest) {
+			const stats = getCacheStats(manifest);
+			console.log(`Cached segments: ${stats.cachedCount}`);
+			console.log(
+				`Total cached duration: ${formatDuration(stats.totalDurationMs)}`,
+			);
+			console.log(`Cache size: ${formatFileSize(stats.totalSizeBytes)}`);
+			if (stats.newestEntry) {
+				console.log(`Last updated: ${stats.newestEntry}`);
+			}
+		} else {
+			console.log("No cache found.");
+		}
+	});
 
 /**
  * Convert command - convert plain text to speaker-tagged format
  */
 program
-  .command("convert <inputFile>")
-  .description(
-    "Convert plain text/prose to speaker-tagged story format using AI",
-  )
-  .option(
-    "-o, --output <path>",
-    "Output file path (default: input_converted.txt)",
-  )
-  .option("-f, --format <type>", "Output format: bracket or colon", "bracket")
-  .option(
-    "-s, --speakers <names>",
-    "Comma-separated list of speaker names to use",
-  )
-  .option(
-    "-m, --model <model>",
-    "Model to use for conversion (default: gemini-3.1-pro-preview)",
-  )
-  .option("--no-narrator", "Exclude NARRATOR tag (dialogue only)")
-  .option("--prompt-only", "Show the conversion prompt without calling the API")
-  .option("-v, --verbose", "Verbose output", false)
-  .action(async (inputFile: string, options) => {
-    const spinner = ora("Reading input file...").start();
+	.command("convert <inputFile>")
+	.description(
+		"Convert plain text/prose to speaker-tagged story format using AI",
+	)
+	.option(
+		"-o, --output <path>",
+		"Output file path (default: input_converted.txt)",
+	)
+	.option("-f, --format <type>", "Output format: bracket or colon", "bracket")
+	.option(
+		"-s, --speakers <names>",
+		"Comma-separated list of speaker names to use",
+	)
+	.option(
+		"-m, --model <model>",
+		"Model to use for conversion (default: gemini-3.1-pro-preview)",
+	)
+	.option("--no-narrator", "Exclude NARRATOR tag (dialogue only)")
+	.option("--prompt-only", "Show the conversion prompt without calling the API")
+	.option("-v, --verbose", "Verbose output", false)
+	.action(async (inputFile: string, options) => {
+		const spinner = ora("Reading input file...").start();
 
-    try {
-      // Check if input file exists
-      if (!(await fileExists(inputFile))) {
-        spinner.fail(`Input file not found: ${inputFile}`);
-        process.exit(1);
-      }
+		try {
+			// Check if input file exists
+			if (!(await fileExists(inputFile))) {
+				spinner.fail(`Input file not found: ${inputFile}`);
+				process.exit(1);
+			}
 
-      // Read input file
-      const inputText = await readFile(inputFile, "utf-8");
-      spinner.succeed(`Read ${inputText.length} characters from ${inputFile}`);
+			// Read input file
+			const inputText = await readFile(inputFile, "utf-8");
+			spinner.succeed(`Read ${inputText.length} characters from ${inputFile}`);
 
-      // Parse speakers if provided
-      const speakers = options.speakers
-        ? options.speakers.split(",").map((s: string) => s.trim().toUpperCase())
-        : undefined;
+			// Parse speakers if provided
+			const speakers = options.speakers
+				? options.speakers.split(",").map((s: string) => s.trim().toUpperCase())
+				: undefined;
 
-      // Validate no duplicate speaker names
-      if (speakers) {
-        const seen = new Set<string>();
-        const duplicates: string[] = [];
-        for (const s of speakers) {
-          if (seen.has(s)) {
-            duplicates.push(s);
-          }
-          seen.add(s);
-        }
-        if (duplicates.length > 0) {
-          spinner.fail(
-            `Duplicate speaker name(s) in -s flag: ${[...new Set(duplicates)].join(", ")}`,
-          );
-          process.exit(1);
-        }
-      }
+			// Validate no duplicate speaker names
+			if (speakers) {
+				const seen = new Set<string>();
+				const duplicates: string[] = [];
+				for (const s of speakers) {
+					if (seen.has(s)) {
+						duplicates.push(s);
+					}
+					seen.add(s);
+				}
+				if (duplicates.length > 0) {
+					spinner.fail(
+						`Duplicate speaker name(s) in -s flag: ${[...new Set(duplicates)].join(", ")}`,
+					);
+					process.exit(1);
+				}
+			}
 
-      const conversionOptions: ConversionOptions = {
-        format: options.format as "bracket" | "colon",
-        speakers,
-        includeNarrator: options.narrator !== false,
-        model: options.model,
-      };
+			const conversionOptions: ConversionOptions = {
+				format: options.format as "bracket" | "colon",
+				speakers,
+				includeNarrator: options.narrator !== false,
+				model: options.model,
+			};
 
-      // If prompt-only, just show the prompt
-      if (options.promptOnly) {
-        const { systemPrompt, userPrompt } = getConversionPrompt(
-          inputText,
-          conversionOptions,
-        );
+			// If prompt-only, just show the prompt
+			if (options.promptOnly) {
+				const { systemPrompt, userPrompt } = getConversionPrompt(
+					inputText,
+					conversionOptions,
+				);
 
-        console.log(chalk.cyan("\n=== System Prompt ===\n"));
-        console.log(systemPrompt);
-        console.log(chalk.cyan("\n=== User Prompt ===\n"));
-        console.log(userPrompt);
-        return;
-      }
+				console.log(chalk.cyan("\n=== System Prompt ===\n"));
+				console.log(systemPrompt);
+				console.log(chalk.cyan("\n=== User Prompt ===\n"));
+				console.log(userPrompt);
+				return;
+			}
 
-      // Convert the text
-      spinner.start("Converting text to story format...");
-      const result = await convertToStoryFormat(inputText, conversionOptions);
+			// Convert the text
+			spinner.start("Converting text to story format...");
+			const result = await convertToStoryFormat(inputText, conversionOptions);
 
-      if (!result.success) {
-        spinner.fail(`Conversion failed: ${result.error}`);
-        process.exit(1);
-      }
+			if (!result.success) {
+				spinner.fail(`Conversion failed: ${result.error}`);
+				process.exit(1);
+			}
 
-      spinner.succeed("Conversion complete!");
+			spinner.succeed("Conversion complete!");
 
-      // Validate the result
-      const validation = validateConvertedContent(
-        // biome-ignore lint/style/noNonNullAssertion: result.content is guaranteed when success is true
-        result.content!,
-        options.format,
-      );
-      if (!validation.valid && options.verbose) {
-        console.log(
-          chalk.yellow("\nWarning: Some formatting issues detected:"),
-        );
-        for (const error of validation.errors.slice(0, 5)) {
-          console.log(chalk.yellow(`  - ${error}`));
-        }
-        if (validation.errors.length > 5) {
-          console.log(
-            chalk.yellow(`  ... and ${validation.errors.length - 5} more`),
-          );
-        }
-      }
+			// Validate the result
+			const validation = validateConvertedContent(
+				// biome-ignore lint/style/noNonNullAssertion: result.content is guaranteed when success is true
+				result.content!,
+				options.format,
+			);
+			if (!validation.valid && options.verbose) {
+				console.log(
+					chalk.yellow("\nWarning: Some formatting issues detected:"),
+				);
+				for (const error of validation.errors.slice(0, 5)) {
+					console.log(chalk.yellow(`  - ${error}`));
+				}
+				if (validation.errors.length > 5) {
+					console.log(
+						chalk.yellow(`  ... and ${validation.errors.length - 5} more`),
+					);
+				}
+			}
 
-      // Determine output path
-      const outputPath =
-        options.output || inputFile.replace(/\.[^.]+$/, "_converted.txt");
+			// Determine output path
+			const outputPath =
+				options.output || inputFile.replace(/\.[^.]+$/, "_converted.txt");
 
-      // Write output file
-      const { writeFile: writeFileFs } = await import("node:fs/promises");
-      // biome-ignore lint/style/noNonNullAssertion: result.content is guaranteed to exist when success is true
-      await writeFileFs(outputPath, result.content!, "utf-8");
+			// Write output file
+			const { writeFile: writeFileFs } = await import("node:fs/promises");
+			// biome-ignore lint/style/noNonNullAssertion: result.content is guaranteed to exist when success is true
+			await writeFileFs(outputPath, result.content!, "utf-8");
 
-      // Show summary
-      console.log(chalk.cyan("\n=== Conversion Summary ===\n"));
-      console.log(`  Input file:  ${inputFile}`);
-      console.log(`  Output file: ${outputPath}`);
-      console.log(`  Model:       ${result.model || "unknown"}`);
-      console.log(`  Format:      ${options.format}`);
-      console.log(`  Segments:    ${validation.lineCount}`);
-      console.log(
-        `  Speakers:    ${result.speakers?.join(", ") || "none detected"}`,
-      );
+			// Show summary
+			console.log(chalk.cyan("\n=== Conversion Summary ===\n"));
+			console.log(`  Input file:  ${inputFile}`);
+			console.log(`  Output file: ${outputPath}`);
+			console.log(`  Model:       ${result.model || "unknown"}`);
+			console.log(`  Format:      ${options.format}`);
+			console.log(`  Segments:    ${validation.lineCount}`);
+			console.log(
+				`  Speakers:    ${result.speakers?.join(", ") || "none detected"}`,
+			);
 
-      if (result.usage) {
-        console.log(
-          `  Tokens:      ${result.usage.inputTokens} in / ${result.usage.outputTokens} out`,
-        );
-      }
+			if (result.usage) {
+				console.log(
+					`  Tokens:      ${result.usage.inputTokens} in / ${result.usage.outputTokens} out`,
+				);
+			}
 
-      console.log(chalk.green("\n✓ Conversion complete!"));
-      console.log(`\nNext steps:`);
-      console.log(`  1. Review the converted file: ${outputPath}`);
-      console.log(`  2. Initialize config: pnpm run init ${outputPath}`);
-      console.log(`  3. Generate audiobook: pnpm run generate ${outputPath}`);
-    } catch (error) {
-      spinner.fail("Conversion failed");
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      exitWithError(errorMessage);
-    }
-  });
+			console.log(chalk.green("\n✓ Conversion complete!"));
+			console.log(`\nNext steps:`);
+			console.log(`  1. Review the converted file: ${outputPath}`);
+			console.log(`  2. Initialize config: pnpm run init ${outputPath}`);
+			console.log(`  3. Generate audiobook: pnpm run generate ${outputPath}`);
+		} catch (error) {
+			spinner.fail("Conversion failed");
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			exitWithError(errorMessage);
+		}
+	});
 
 /**
  * Analyze command - identify characters and genders in text
  * Optionally suggests voices based on character gender and can update config
  */
 program
-  .command("analyze <inputFile>")
-  .description(
-    "Analyze a story/text file to identify characters and their genders",
-  )
-  .option(
-    "-m, --model <model>",
-    "Model to use in provider:model format (e.g., gemini:gemini-3.1-pro-preview, grok:grok-4-latest)",
-  )
-  .option("--no-narrator", "Exclude NARRATOR from analysis")
-  .option("--suggest-voices", "Suggest voices based on character genders")
-  .option(
-    "--update-config [path]",
-    "Update config file with suggested voices (default: ./config.json)",
-  )
-  .option("--prompt-only", "Show the analysis prompt without calling the API")
-  .option("-v, --verbose", "Verbose output", false)
-  .option("--json", "Output results as JSON", false)
-  .action(async (inputFile: string, options) => {
-    const spinner = ora("Reading input file...").start();
+	.command("analyze <inputFile>")
+	.description(
+		"Analyze a story/text file to identify characters and their genders",
+	)
+	.option(
+		"-m, --model <model>",
+		"Model to use in provider:model format (e.g., gemini:gemini-3.1-pro-preview, grok:grok-4-latest)",
+	)
+	.option("--no-narrator", "Exclude NARRATOR from analysis")
+	.option("--suggest-voices", "Suggest voices based on character genders")
+	.option(
+		"--update-config [path]",
+		"Update config file with suggested voices (default: ./config.json)",
+	)
+	.option("--prompt-only", "Show the analysis prompt without calling the API")
+	.option("-v, --verbose", "Verbose output", false)
+	.option("--json", "Output results as JSON", false)
+	.action(async (inputFile: string, options) => {
+		const spinner = ora("Reading input file...").start();
 
-    try {
-      // Check if input file exists
-      if (!(await fileExists(inputFile))) {
-        spinner.fail(`Input file not found: ${inputFile}`);
-        process.exit(1);
-      }
+		try {
+			// Check if input file exists
+			if (!(await fileExists(inputFile))) {
+				spinner.fail(`Input file not found: ${inputFile}`);
+				process.exit(1);
+			}
 
-      // Read input file
-      const inputText = await readFile(inputFile, "utf-8");
-      spinner.succeed(`Read ${inputText.length} characters from ${inputFile}`);
+			// Read input file
+			const inputText = await readFile(inputFile, "utf-8");
+			spinner.succeed(`Read ${inputText.length} characters from ${inputFile}`);
 
-      const analysisOptions: AnalysisOptions = {
-        model: options.model,
-        includeNarrator: options.narrator !== false,
-      };
+			const analysisOptions: AnalysisOptions = {
+				model: options.model,
+				includeNarrator: options.narrator !== false,
+			};
 
-      // If prompt-only, just show the prompt
-      if (options.promptOnly) {
-        const { systemPrompt, userPrompt } = getAnalysisPrompt(
-          inputText,
-          analysisOptions,
-        );
+			// If prompt-only, just show the prompt
+			if (options.promptOnly) {
+				const { systemPrompt, userPrompt } = getAnalysisPrompt(
+					inputText,
+					analysisOptions,
+				);
 
-        console.log(chalk.cyan("\n=== System Prompt ===\n"));
-        console.log(systemPrompt);
-        console.log(chalk.cyan("\n=== User Prompt ===\n"));
-        console.log(userPrompt);
-        return;
-      }
+				console.log(chalk.cyan("\n=== System Prompt ===\n"));
+				console.log(systemPrompt);
+				console.log(chalk.cyan("\n=== User Prompt ===\n"));
+				console.log(userPrompt);
+				return;
+			}
 
-      // Analyze the text
-      const modelInfo = options.model || getDefaultModelId();
-      spinner.start(`Analyzing text for characters using ${modelInfo}...`);
-      const result = await analyzeStory(inputText, analysisOptions);
+			// Analyze the text
+			const modelInfo = options.model || getDefaultModelId();
+			spinner.start(`Analyzing text for characters using ${modelInfo}...`);
+			const result = await analyzeStory(inputText, analysisOptions);
 
-      if (!result.success) {
-        spinner.fail(`Analysis failed: ${result.error}`);
-        process.exit(1);
-      }
+			if (!result.success) {
+				spinner.fail(`Analysis failed: ${result.error}`);
+				process.exit(1);
+			}
 
-      spinner.succeed(
-        `Found ${result.characters?.length || 0} character(s) using ${result.model || modelInfo}`,
-      );
+			spinner.succeed(
+				`Found ${result.characters?.length || 0} character(s) using ${result.model || modelInfo}`,
+			);
 
-      // Generate voice suggestions if requested
-      const voiceSuggestions =
-        options.suggestVoices || options.updateConfig
-          ? suggestVoicesForAnalysis(result)
-          : [];
+			// Generate voice suggestions if requested
+			const voiceSuggestions =
+				options.suggestVoices || options.updateConfig
+					? suggestVoicesForAnalysis(result)
+					: [];
 
-      // Output results
-      if (options.json) {
-        const output: Record<string, unknown> = {
-          characters: result.characters,
-        };
-        if (voiceSuggestions.length > 0) {
-          output.voiceSuggestions = suggestionsToVoiceConfigs(voiceSuggestions);
-        }
-        console.log(JSON.stringify(output, null, 2));
-      } else {
-        console.log(chalk.cyan("\n=== Character Analysis ===\n"));
-        console.log(formatAnalysisResult(result));
+			// Output results
+			if (options.json) {
+				const output: Record<string, unknown> = {
+					characters: result.characters,
+				};
+				if (voiceSuggestions.length > 0) {
+					output.voiceSuggestions = suggestionsToVoiceConfigs(voiceSuggestions);
+				}
+				console.log(JSON.stringify(output, null, 2));
+			} else {
+				console.log(chalk.cyan("\n=== Character Analysis ===\n"));
+				console.log(formatAnalysisResult(result));
 
-        // Show voice suggestions if requested
-        if (voiceSuggestions.length > 0) {
-          console.log(chalk.cyan("=== Voice Suggestions ===\n"));
-          console.log(formatVoiceSuggestions(voiceSuggestions));
-        }
+				// Show voice suggestions if requested
+				if (voiceSuggestions.length > 0) {
+					console.log(chalk.cyan("=== Voice Suggestions ===\n"));
+					console.log(formatVoiceSuggestions(voiceSuggestions));
+				}
 
-        // Show speakers list for convert command
-        const speakersList = getSpeakerListForConvert(result);
-        if (speakersList) {
-          console.log(chalk.cyan("=== For Convert Command ===\n"));
-          console.log(`Speakers: ${speakersList}`);
-          console.log(
-            `\nUsage: pnpm run convert ${inputFile} -s "${speakersList}"`,
-          );
-        }
+				// Show speakers list for convert command
+				const speakersList = getSpeakerListForConvert(result);
+				if (speakersList) {
+					console.log(chalk.cyan("=== For Convert Command ===\n"));
+					console.log(`Speakers: ${speakersList}`);
+					console.log(
+						`\nUsage: pnpm run convert ${inputFile} -s "${speakersList}"`,
+					);
+				}
 
-        if (options.verbose) {
-          console.log(chalk.cyan("\n=== Details ===\n"));
-          console.log(`  Model: ${result.model || modelInfo}`);
-          if (result.usage) {
-            console.log(`  Input tokens:  ${result.usage.inputTokens}`);
-            console.log(`  Output tokens: ${result.usage.outputTokens}`);
-          }
-        }
-      }
+				if (options.verbose) {
+					console.log(chalk.cyan("\n=== Details ===\n"));
+					console.log(`  Model: ${result.model || modelInfo}`);
+					if (result.usage) {
+						console.log(`  Input tokens:  ${result.usage.inputTokens}`);
+						console.log(`  Output tokens: ${result.usage.outputTokens}`);
+					}
+				}
+			}
 
-      // Update config if requested
-      if (options.updateConfig && voiceSuggestions.length > 0) {
-        const configPath =
-          typeof options.updateConfig === "string"
-            ? options.updateConfig
-            : "./config.json";
+			// Update config if requested
+			if (options.updateConfig && voiceSuggestions.length > 0) {
+				const configPath =
+					typeof options.updateConfig === "string"
+						? options.updateConfig
+						: "./config.json";
 
-        try {
-          let config: Config;
+				try {
+					let config: Config;
 
-          // Try to load existing config, or create new one
-          try {
-            config = await loadConfig(configPath);
-          } catch {
-            // Config doesn't exist, create from defaults
-            config = { ...DEFAULT_CONFIG };
-          }
+					// Try to load existing config, or create new one
+					try {
+						config = await loadConfig(configPath);
+					} catch {
+						// Config doesn't exist, create from defaults
+						config = { ...DEFAULT_CONFIG };
+					}
 
-          // Update voices with suggestions
-          const newVoices = suggestionsToVoiceConfigs(voiceSuggestions);
+					// Update voices with suggestions
+					const newVoices = suggestionsToVoiceConfigs(voiceSuggestions);
 
-          // Validate no duplicate voiceNames before writing
-          const voiceNameCounts = new Map<string, string[]>();
-          for (const v of newVoices) {
-            if (v.voiceName) {
-              const existing = voiceNameCounts.get(v.voiceName) || [];
-              existing.push(v.name);
-              voiceNameCounts.set(v.voiceName, existing);
-            }
-          }
-          const duplicateVoices = [...voiceNameCounts.entries()].filter(
-            ([, speakers]) => speakers.length > 1,
-          );
-          if (duplicateVoices.length > 0) {
-            const details = duplicateVoices
-              .map(
-                ([voice, speakers]) =>
-                  `"${voice}" used by: ${speakers.join(", ")}`,
-              )
-              .join("; ");
-            throw new Error(
-              `Cannot write config with duplicate voiceName values: ${details}`,
-            );
-          }
+					// Validate no duplicate voiceNames before writing
+					const voiceNameCounts = new Map<string, string[]>();
+					for (const v of newVoices) {
+						if (v.voiceName) {
+							const existing = voiceNameCounts.get(v.voiceName) || [];
+							existing.push(v.name);
+							voiceNameCounts.set(v.voiceName, existing);
+						}
+					}
+					const duplicateVoices = [...voiceNameCounts.entries()].filter(
+						([, speakers]) => speakers.length > 1,
+					);
+					if (duplicateVoices.length > 0) {
+						const details = duplicateVoices
+							.map(
+								([voice, speakers]) =>
+									`"${voice}" used by: ${speakers.join(", ")}`,
+							)
+							.join("; ");
+						throw new Error(
+							`Cannot write config with duplicate voiceName values: ${details}`,
+						);
+					}
 
-          config.voices = newVoices;
+					config.voices = newVoices;
 
-          // Save config
-          await writeFileFs(configPath, JSON.stringify(config, null, 2));
+					// Save config
+					await writeFileFs(configPath, JSON.stringify(config, null, 2));
 
-          console.log(chalk.green(`\n✓ Updated config file: ${configPath}`));
-          console.log(`  Added ${newVoices.length} voice configuration(s)`);
-        } catch (error) {
-          const errorMsg =
-            error instanceof Error ? error.message : String(error);
-          console.error(
-            chalk.yellow(`\n⚠ Failed to update config: ${errorMsg}`),
-          );
-        }
-      }
-    } catch (error) {
-      spinner.fail("Analysis failed");
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      exitWithError(errorMessage);
-    }
-  });
+					console.log(chalk.green(`\n✓ Updated config file: ${configPath}`));
+					console.log(`  Added ${newVoices.length} voice configuration(s)`);
+				} catch (error) {
+					const errorMsg =
+						error instanceof Error ? error.message : String(error);
+					console.error(
+						chalk.yellow(`\n⚠ Failed to update config: ${errorMsg}`),
+					);
+				}
+			}
+		} catch (error) {
+			spinner.fail("Analysis failed");
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			exitWithError(errorMessage);
+		}
+	});
 
 /**
  * Voices command - list available voices
  */
 program
-  .command("voices")
-  .description("List available TTS voices")
-  .option("--json", "Output as JSON", false)
-  .action((options) => {
-    if (options.json) {
-      console.log(JSON.stringify(GEMINI_VOICES_DATA, null, 2));
-      return;
-    }
+	.command("voices")
+	.description("List available TTS voices")
+	.option("--json", "Output as JSON", false)
+	.action((options) => {
+		if (options.json) {
+			console.log(JSON.stringify(GEMINI_VOICES_DATA, null, 2));
+			return;
+		}
 
-    console.log(chalk.cyan("\n=== Available Gemini Voices ===\n"));
+		console.log(chalk.cyan("\n=== Available Gemini Voices ===\n"));
 
-    // Group by gender
-    const femaleVoices = GEMINI_VOICES_DATA.filter(
-      (v) => v.gender === "Female",
-    );
-    const maleVoices = GEMINI_VOICES_DATA.filter((v) => v.gender === "Male");
-    const neutralVoices = GEMINI_VOICES_DATA.filter(
-      (v) => v.gender === "Neutral",
-    );
+		// Group by gender
+		const femaleVoices = GEMINI_VOICES_DATA.filter(
+			(v) => v.gender === "Female",
+		);
+		const maleVoices = GEMINI_VOICES_DATA.filter((v) => v.gender === "Male");
+		const neutralVoices = GEMINI_VOICES_DATA.filter(
+			(v) => v.gender === "Neutral",
+		);
 
-    const formatVoice = (v: (typeof GEMINI_VOICES_DATA)[0]) =>
-      `  ${v.name.padEnd(14)} - ${v.style.padEnd(12)} (${v.pitch} pitch)`;
+		const formatVoice = (v: (typeof GEMINI_VOICES_DATA)[0]) =>
+			`  ${v.name.padEnd(14)} - ${v.style.padEnd(12)} (${v.pitch} pitch)`;
 
-    console.log(chalk.magenta("Female Voices:"));
-    for (const voice of femaleVoices) {
-      console.log(formatVoice(voice));
-    }
+		console.log(chalk.magenta("Female Voices:"));
+		for (const voice of femaleVoices) {
+			console.log(formatVoice(voice));
+		}
 
-    console.log(chalk.blue("\nMale Voices:"));
-    for (const voice of maleVoices) {
-      console.log(formatVoice(voice));
-    }
+		console.log(chalk.blue("\nMale Voices:"));
+		for (const voice of maleVoices) {
+			console.log(formatVoice(voice));
+		}
 
-    console.log(chalk.yellow("\nNeutral Voices:"));
-    for (const voice of neutralVoices) {
-      console.log(formatVoice(voice));
-    }
+		console.log(chalk.yellow("\nNeutral Voices:"));
+		for (const voice of neutralVoices) {
+			console.log(formatVoice(voice));
+		}
 
-    console.log(
-      `\nTotal: ${GEMINI_VOICES_DATA.length} voices (${femaleVoices.length} female, ${maleVoices.length} male, ${neutralVoices.length} neutral)`,
-    );
-    console.log(
-      "\nUse these voice names in your config.json 'voiceName' field.",
-    );
-  });
+		console.log(
+			`\nTotal: ${GEMINI_VOICES_DATA.length} voices (${femaleVoices.length} female, ${maleVoices.length} male, ${neutralVoices.length} neutral)`,
+		);
+		console.log(
+			"\nUse these voice names in your config.json 'voiceName' field.",
+		);
+	});
 
 // Parse arguments and run
 program.parse(process.argv);
 
 // Show help if no command provided
 if (!process.argv.slice(2).length) {
-  program.outputHelp();
+	program.outputHelp();
 }
